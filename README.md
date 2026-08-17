@@ -131,6 +131,26 @@ npm run crossvalidate   # decode live responses with this code and Mol*, assert 
 npm run verify          # re-derive the grid convention from physics against live data
 ```
 
+## Where structural knowledge actually exists
+
+![EGFR coverage: the kinase domain solved hundreds of times over, the rest barely](docs/media/coverage.png)
+
+Above the ligand table for any target: how many deposited structures cover each residue, and — as a
+separate band — AlphaFold's own per-residue confidence in its prediction. EGFR reads at a glance:
+residue 702 has been solved **333 times over** while the median residue appears in 38, and the
+C-terminal tail is orange because the model itself reports low confidence there.
+
+**The two bands are never merged, on purpose.** A measurement and a prediction are different kinds
+of claim, and blending them into a single "confidence" number would be exactly the dishonesty this
+tool exists to argue against. Within minutes of shipping, the live view turned up residue 751:
+solved experimentally 332 times, pLDDT 46. Two sources disagreeing — which you can only see because
+they are shown separately.
+
+AlphaFold keys on UniProt accession, the same key the ligand index uses, and stores pLDDT in the
+B-factor column the atom parser already read, so the join costs nothing. Coverage spans come from
+PDBe's UniProt mappings in one request. Model URLs are read from the API rather than constructed —
+the database is on v6 and hand-built v4 paths 404.
+
 ## Paste a target, get every ligand ever modelled into it
 
 Type `EGFR`, `P00918`, or `1cbs`. A target lookup is **one HTTP request** and resolves in about
