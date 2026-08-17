@@ -1,0 +1,188 @@
+// Client-side target lookup against the precomputed index.
+//
+// One request for an accession, two for a gene or protein name. No manifest to
+// download first — the shard is addressed by hashing the key, so the first
+// byte fetched is already the answer.
+//
+// Range requests were considered and rejected on evidence: GitHub Pages applies
+// Range to the COMPRESSED representation, and since Accept-Encoding is a
+// forbidden header the browser cannot opt out. A ranged fetch fails outright
+// with ERR_CONTENT_DECODING_FAILED. Hash-bucketed whole files avoid the problem
+// entirely and Pages gzips them transparently.
+
+import {
+  ligandShard, nameShard, normaliseName, looksLikeAccession,
+  dequantiseRscc, dequantiseUnit, shellOf, ABSENT,
+  FLAG_SOI, FLAG_HAS_RSCC, FLAG_XRAY, FLAG_EM, FLAG_ADDITIVE, FLAG_PRIMARY_TARGET,
+} from './bucket';
+
+export interface IndexMeta {
+  v: number;
+  built: string;
+  shells: number[];
+  counts: Record<string, number>;
+  reference: { rule: string; perShell: number[]; minPerShell: number };
+  cdfRscc: number[][];
+}
+
+export interface TargetLigand {
+  entry: string;
+  comp: string;
+  compName: string | null;
+  chain: string;
+  seq: number;
+  rscc: number | null;
+  rsr: number | null;
+  rcsbFit: number | null;
+  natoms: number | null;
+  targets: number;
+  resolution: number | null;
+  year: number | null;
+  isSubject: boolean;
+  isAdditive: boolean;
+  isPrimary: boolean;
+  isXray: boolean;
+  isEm: boolean;
+  /** Percentile of this RSCC within its resolution shell, 0..100. Null = unscored. */
+  percentile: number | null;
+}
+
+export interface TargetResult {
+  accession: string;
+  protein: string;
+  gene: string;
+  organism: string;
+  ligands: TargetLigand[];
+  /** Rows excluded from the main list because they are ions/buffers. */
+  additiveCount: number;
+  unscoredCount: number;
+}
+
+const BASE = new URL('index/', document.baseURI).href;
+
+let metaPromise: Promise<IndexMeta> | null = null;
+let compsPromise: Promise<Record<string, [string, number | null]>> | null = null;
+const shardCache = new Map<string, Promise<any>>();
+
+export function loadMeta(): Promise<IndexMeta> {
+  metaPromise ??= fetch(`${BASE}meta.json`).then((r) => {
+    if (!r.ok) throw new Error(`index metadata unavailable (HTTP ${r.status})`);
+    return r.json();
+  });
+  return metaPromise;
+}
+
+function loadComps(): Promise<Record<string, [string, number | null]>> {
+  // Deliberately not awaited before first paint: the list renders from comp
+  // ids immediately and names fill in when this lands.
+  compsPromise ??= fetch(`${BASE}comps.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+  return compsPromise;
+}
+
+function loadShard(dir: 'lig' | 'name', shard: string): Promise<any> {
+  const key = `${dir}/${shard}`;
+  let p = shardCache.get(key);
+  if (!p) {
+    p = fetch(`${BASE}${key}.json`).then((r) => {
+      if (r.status === 404) return null;   // an empty bucket is a real answer
+      if (!r.ok) throw new Error(`index shard ${key}: HTTP ${r.status}`);
+      return r.json();
+    });
+    shardCache.set(key, p);
+  }
+  return p;
+}
+
+/** Resolve free text to candidate accessions. */
+export async function resolveTarget(input: string): Promise<string[]> {
+  const raw = input.trim();
+  if (!raw) return [];
+  if (looksLikeAccession(raw)) return [raw.toUpperCase()];
+
+  const key = normaliseName(raw);
+  if (!key) return [];
+  const shard = await loadShard('name', nameShard(key));
+  return shard?.n?.[key] ?? [];
+}
+
+/** Percentile of a quantised RSCC within its shell, from the build-time CDF. */
+function percentileOf(meta: IndexMeta, q: number, resolutionHundredths: number): number | null {
+  if (q === ABSENT) return null;
+  const shell = shellOf(resolutionHundredths === 65535 ? null : resolutionHundredths / 100);
+  const table = meta.cdfRscc[shell];
+  if (!table?.length) return null;
+  const raw = table[q];
+  if (raw === 0 && table[254] === 0) return null;   // shell had too few references
+  return (raw / 65535) * 100;
+}
+
+export async function fetchTarget(accession: string): Promise<TargetResult | null> {
+  const acc = accession.toUpperCase();
+  const [meta, shard] = await Promise.all([loadMeta(), loadShard('lig', ligandShard(acc))]);
+  const range = shard?.A?.[acc];
+  if (!range) return null;
+
+  const [start, count] = range;
+  const [protein, gene, organism] = shard.D?.[acc] ?? ['', '', ''];
+  const comps = await loadComps().catch(() => ({} as Record<string, [string, number | null]>));
+
+  const ligands: TargetLigand[] = [];
+  let additiveCount = 0;
+  let unscoredCount = 0;
+
+  for (let i = start; i < start + count; i++) {
+    const flags = shard.f[i];
+    const comp = shard.C[shard.c[i]];
+    const resolution = shard.R[i] === 65535 ? null : shard.R[i] / 100;
+    const q = shard.q[i];
+    const isAdditive = (flags & FLAG_ADDITIVE) !== 0;
+    if (isAdditive) additiveCount++;
+    if (!(flags & FLAG_HAS_RSCC)) unscoredCount++;
+
+    ligands.push({
+      entry: shard.E[shard.e[i]],
+      comp,
+      compName: comps[comp]?.[0] ?? null,
+      chain: shard.h[i],
+      seq: shard.s[i],
+      rscc: dequantiseRscc(q),
+      rsr: dequantiseUnit(shard.r[i]),
+      rcsbFit: dequantiseUnit(shard.k[i]),
+      natoms: shard.n[i] === ABSENT ? null : shard.n[i],
+      targets: shard.g[i],
+      resolution,
+      year: shard.y[i] === ABSENT ? null : shard.y[i] + 1970,
+      isSubject: (flags & FLAG_SOI) !== 0,
+      isAdditive,
+      isPrimary: (flags & FLAG_PRIMARY_TARGET) !== 0,
+      isXray: (flags & FLAG_XRAY) !== 0,
+      isEm: (flags & FLAG_EM) !== 0,
+      percentile: percentileOf(meta, q, shard.R[i]),
+    });
+  }
+
+  ligands.sort(compare);
+  return { accession: acc, protein, gene, organism, ligands, additiveCount, unscoredCount };
+}
+
+/**
+ * Worst evidence first, as a total order so permalinks are stable.
+ *
+ * RSR enters only as a tie-break rather than a weighted blend: RSCC and RSR are
+ * strongly correlated, and inventing a weighting would add a number that has to
+ * be defended and buys nothing. RCSB's own ranking_model_fit is displayed
+ * beside ours as an independent cross-check but never ranked on, because it is
+ * not resolution-stratified.
+ */
+function compare(a: TargetLigand, b: TargetLigand): number {
+  const aNull = a.percentile === null;
+  const bNull = b.percentile === null;
+  if (aNull !== bNull) return aNull ? 1 : -1;            // scored before unscored
+  if (!aNull && !bNull && a.percentile !== b.percentile) return a.percentile! - b.percentile!;
+  if (a.rscc !== null && b.rscc !== null && a.rscc !== b.rscc) return a.rscc - b.rscc;
+  if (a.rsr !== null && b.rsr !== null && a.rsr !== b.rsr) return b.rsr - a.rsr;
+  if (a.resolution !== null && b.resolution !== null && a.resolution !== b.resolution) {
+    return a.resolution - b.resolution;                   // less excuse at high resolution
+  }
+  return a.entry.localeCompare(b.entry) || a.chain.localeCompare(b.chain) || a.seq - b.seq;
+}

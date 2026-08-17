@@ -3,3 +3,6 @@ dist/
 .vite/
 *.log
 .DS_Store
+
+# build artefacts for the archive index (raw crawl cache is local only)
+.index-raw/

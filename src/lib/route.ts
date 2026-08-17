@@ -17,9 +17,13 @@ export interface Route {
   asymId: string | null;
   sigma: number | null;
   diff: boolean | null;
+  /** UniProt accession for a whole-target view: #t/P00918 */
+  target: string | null;
 }
 
-export const EMPTY_ROUTE: Route = { entry: null, comp: null, asymId: null, sigma: null, diff: null };
+export const EMPTY_ROUTE: Route = {
+  entry: null, comp: null, asymId: null, sigma: null, diff: null, target: null,
+};
 
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#\/?/, '');
@@ -34,10 +38,16 @@ export function parseRoute(hash: string): Route {
   const sigma = sigmaRaw !== null && Number.isFinite(Number(sigmaRaw)) ? Number(sigmaRaw) : null;
   const diffRaw = params.get('d');
 
-  const entry = /^[0-9a-zA-Z]{4}$/.test(parts[0]) ? parts[0].toLowerCase() : null;
+  if (parts[0] === 't' && parts[1]) {
+    return { ...EMPTY_ROUTE, target: parts[1].toUpperCase() };
+  }
+
+  // Same rule as the search box: a PDB id starts with a digit.
+  const entry = /^[0-9][0-9a-zA-Z]{3}$/.test(parts[0]) ? parts[0].toLowerCase() : null;
   if (!entry) return EMPTY_ROUTE;
 
   return {
+    ...EMPTY_ROUTE,
     entry,
     comp: parts[1] ? parts[1].toUpperCase() : null,
     asymId: parts[2] ?? null,
@@ -47,6 +57,7 @@ export function parseRoute(hash: string): Route {
 }
 
 export function buildHash(route: Partial<Route>): string {
+  if (route.target) return `#t/${route.target.toUpperCase()}`;
   if (!route.entry) return '#';
   let path = route.entry.toLowerCase();
   if (route.comp) path += `/${route.comp.toUpperCase()}`;

@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LigandPanel } from './components/LigandPanel';
+import { TargetPanel } from './components/TargetPanel';
+import { resolveTarget } from './lib/targetIndex';
 import { fetchEntry, hasDensity, isAdditive, type EntrySummary, type LigandInstance } from './lib/entry';
 import { runValidationGate, type GateResult } from './lib/gate';
 import { parseRoute, buildHash, type Route } from './lib/route';
+
+// Targets verified present in the built index, with ligand counts from it.
+const TARGETS = [
+  { accession: 'P00918', gene: 'CA2', label: 'Carbonic anhydrase 2', note: '4,429 ligand instances — the most-liganded target in the PDB' },
+  { accession: 'P00533', gene: 'EGFR', label: 'Epidermal growth factor receptor', note: 'the kinase behind erlotinib and gefitinib' },
+  { accession: 'P24941', gene: 'CDK2', label: 'Cyclin-dependent kinase 2', note: 'a fragment-screening workhorse' },
+  { accession: 'P62942', gene: 'FKBP1A', label: 'FKBP12', note: 'rapamycin, shared with mTOR' },
+];
 
 // Every entry here was checked against the archive: X-ray, deposited structure
 // factors, and the named ligand really is a non-polymer entity with that label
@@ -112,6 +122,8 @@ export default function App() {
   const [entryError, setEntryError] = useState<string | null>(null);
   const [entryLoading, setEntryLoading] = useState(false);
   const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const rerun = useCallback(() => {
     setGate(null);
@@ -158,12 +170,37 @@ export default function App() {
       ?? null;
   }, [entry, route.comp, route.asymId]);
 
-  const submit = (e: React.FormEvent) => {
+  // One box, two kinds of question. A 4-character token is a PDB entry;
+  // anything else is a target — an accession, a gene symbol, or a protein name.
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = query.trim();
-    if (!id) return;
-    navigate({ entry: id.toLowerCase(), comp: null, asymId: null });
-    setQuery('');
+    const raw = query.trim();
+    if (!raw) return;
+
+    // A 4-character PDB id ALWAYS starts with a digit ("1cbs", "6lu7"), which
+    // is what separates it from a 4-letter gene symbol like EGFR or TP53.
+    // Without this, every four-letter target silently became an entry lookup.
+    if (/^[0-9][0-9a-zA-Z]{3}$/.test(raw)) {
+      navigate({ entry: raw.toLowerCase(), comp: null, asymId: null, target: null });
+      setQuery('');
+      return;
+    }
+
+    setSearchError(null);
+    setSearching(true);
+    try {
+      const hits = await resolveTarget(raw);
+      if (!hits.length) {
+        setSearchError(`No PDB entry, UniProt accession, gene or protein name matching “${raw}”.`);
+        return;
+      }
+      navigate({ target: hits[0] });
+      setQuery('');
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSearching(false);
+    }
   };
 
   const densityAvailable = entry ? hasDensity(entry.method) : true;
@@ -181,17 +218,16 @@ export default function App() {
             </p>
           </div>
           <form className="search" onSubmit={submit}>
-            <label htmlFor="pdbid">PDB entry</label>
+            <label htmlFor="pdbid">Target or entry</label>
             <input
               id="pdbid"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. 6lu7"
-              maxLength={4}
+              onChange={(e) => { setQuery(e.target.value); setSearchError(null); }}
+              placeholder="EGFR, P00918, or 1cbs"
               autoComplete="off"
               spellCheck={false}
             />
-            <button type="submit">Open</button>
+            <button type="submit" disabled={searching}>{searching ? '…' : 'Open'}</button>
           </form>
         </div>
       </header>
@@ -207,6 +243,16 @@ export default function App() {
 
       {gate?.ok && (
         <>
+          {searchError && <p className="error">{searchError}</p>}
+
+          {route.target && (
+            <TargetPanel
+              key={route.target}
+              accession={route.target}
+              onOpenLigand={(entry, comp) => navigate({ target: null, entry: entry.toLowerCase(), comp, asymId: null })}
+            />
+          )}
+
           {entryLoading && <p className="muted">Loading {route.entry?.toUpperCase()}…</p>}
           {entryError && <p className="error">{entryError}</p>}
 
@@ -245,9 +291,25 @@ export default function App() {
             </>
           )}
 
-          {!entry && !entryLoading && (
+          {!entry && !entryLoading && !route.target && (
             <section className="gallery">
-              <h2 className="section-title">Start somewhere</h2>
+              <h2 className="section-title">Start with a target</h2>
+              <div className="gallery-grid">
+                {TARGETS.map((t) => (
+                  <button
+                    key={t.accession}
+                    type="button"
+                    className="gallery-card gallery-card--target"
+                    onClick={() => navigate({ target: t.accession })}
+                  >
+                    <span className="gallery-id">{t.gene}</span>
+                    <span className="gallery-label">{t.label}</span>
+                    <span className="gallery-note">{t.note}</span>
+                  </button>
+                ))}
+              </div>
+
+              <h2 className="section-title" style={{ marginTop: 30 }}>…or a single ligand</h2>
               <div className="gallery-grid">
                 {GALLERY.map((g) => (
                   <button
