@@ -83,7 +83,11 @@ body {
 .stats .k { font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .stats .v { font-family: var(--mono); font-size: 17px; }
 
-.canvas-mount { width: 100%; height: 380px; border: 1px solid var(--line); background: #0a0d12; cursor: grab; }
+.canvas-mount { width: 100%; height: 380px; border: 1px solid var(--line); background: #0a0d12; cursor: grab; overflow: hidden; }
+/* three.js writes an inline pixel width onto the canvas from whatever the
+   container measured at the time. If that measurement lands before layout
+   settles the page scrolls sideways for a frame — cap it so it cannot. */
+.canvas-mount canvas { display: block; max-width: 100%; }
 .canvas-mount:active { cursor: grabbing; }
 
 .controls { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; margin: 14px 0 18px; font-size: 13px; color: var(--muted); }
@@ -221,6 +225,16 @@ body {
   grid-template-columns: 66px 74px minmax(0, 1fr) 74px 68px 74px 40px;
   gap: 10px; align-items: center;
 }
+/* The fixed columns total more than a phone is wide, which pushed the whole
+   page sideways by 63px. Below 760px the chemical name is dropped (it is the
+   only column that is not evidence) and the rest tighten. */
+@media (max-width: 760px) {
+  .thead, .trow { grid-template-columns: 58px 62px 60px 58px 62px; gap: 8px; font-size: 11.5px; }
+  .thead span:nth-child(3), .trow-name { display: none; }
+  .thead span:nth-child(4), .thead span:nth-child(5), .thead span:nth-child(6) { text-align: right; }
+  .trow-multi { display: none; }
+  .tbody { max-height: none; }
+}
 .thead {
   font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
   padding: 0 10px 7px; border-bottom: 1px solid var(--line);
@@ -343,4 +357,31 @@ body {
 @media (max-width: 640px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
   .app { padding: 24px 16px 60px; }
+  .masthead-row { gap: 16px; }
+  .search { width: 100%; }
+  .search input { flex: 1 1 auto; width: auto; }
 }
+
+/* ── minimum hit areas ────────────────────────────────────────────────
+   Every control needs 24px of tappable height (WCAG 2.2 target size).
+   Measured before: five controls under it — the contour slider, the
+   permalink and re-run buttons, the filter segments, and the pLDDT
+   loader. */
+.gate-line button,
+.linkbtn,
+.cov-load,
+.seg button,
+.chip,
+.depict-cta,
+.search button,
+.additives summary {
+  min-height: 24px;
+}
+.controls input[type="range"] { height: 24px; }
+/* A checkbox cannot be padded, so it is sized directly. Inline links inside
+   running prose are exempt from the target-size rule and stay as they are. */
+.controls .check input[type="checkbox"] { width: 18px; height: 18px; }
+@media (pointer: coarse) { .controls .check input[type="checkbox"] { width: 24px; height: 24px; } }
+.controls .check { min-height: 24px; }
+.controls input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; }
+.trow { min-height: 30px; }

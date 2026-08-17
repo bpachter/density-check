@@ -309,5 +309,29 @@ export function DensityCanvas({
     };
   }, [map2FoFc, mapFoFc, sigmaLevel, showDifference, atoms]);
 
-  return <div className="canvas-mount" ref={mountRef} />;
+  // The 3D view is the centre of the tool and was previously unreachable by a
+  // screen reader. It cannot be made explorable, so it is described instead:
+  // the same verdict the sighted user reads off the cloud, in words.
+  const weak = atoms.filter((a) => Number.isFinite(a.sigma2FoFc) && a.sigma2FoFc < 1);
+  const refuted = atoms.filter((a) => Number.isFinite(a.sigmaFoFc) && a.sigmaFoFc < -3);
+  const description =
+    `Three-dimensional view: ${atoms.length} ligand atoms inside the measured electron density, ` +
+    `contoured at ${sigmaLevel.toFixed(1)} sigma. ` +
+    (weak.length
+      ? `${weak.length} atom${weak.length === 1 ? '' : 's'} below 1 sigma (${weak.slice(0, 6).map((a) => a.name).join(', ')}${weak.length > 6 ? ', and others' : ''}). `
+      : 'Every atom sits above 1 sigma. ') +
+    (refuted.length
+      ? `${refuted.length} atom${refuted.length === 1 ? '' : 's'} sit in negative difference density, meaning the experiment saw nothing there. `
+      : '') +
+    'The per-atom table below carries the same values as text.';
+
+  return (
+    <div
+      className="canvas-mount"
+      ref={mountRef}
+      role="img"
+      aria-label={description}
+      tabIndex={0}
+    />
+  );
 }
