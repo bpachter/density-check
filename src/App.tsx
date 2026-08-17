@@ -3,6 +3,7 @@ import { LigandPanel } from './components/LigandPanel';
 import { TargetPanel } from './components/TargetPanel';
 import { Landing } from './components/Landing';
 import { CompareView } from './components/CompareView';
+import { LocalAnalysis } from './components/LocalAnalysis';
 import { resolveTarget } from './lib/targetIndex';
 import { fetchEntry, hasDensity, isAdditive, type EntrySummary, type LigandInstance } from './lib/entry';
 import { runValidationGate, type GateResult } from './lib/gate';
@@ -230,6 +231,14 @@ export default function App() {
         <>
           {searchError && <p className="error">{searchError}</p>}
 
+          {route.local && (
+
+            <LocalAnalysis sigma={route.sigma ?? 1.2} onSigma={(s) => navigate({ sigma: s })} />
+
+          )}
+
+          
+
           {route.compare && (
             <CompareView
               pair={route.compare}
@@ -288,7 +297,7 @@ export default function App() {
             </>
           )}
 
-          {!entry && !entryLoading && !route.target && !route.compare && (
+          {!entry && !entryLoading && !route.target && !route.compare && !route.local && (
             <Landing
               onTarget={(accession) => navigate({ target: accession })}
               onLigand={(e, comp, asym) => navigate({ entry: e, comp, asymId: asym, target: null })}
@@ -316,6 +325,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 

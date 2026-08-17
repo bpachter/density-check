@@ -21,10 +21,12 @@ export interface Route {
   target: string | null;
   /** Two ligands side by side: #x/1m17/AQ4/B/3ptb/BEN/C */
   compare: Array<{ entry: string; comp: string; asymId: string }> | null;
+  /** Analyse local files: #local */
+  local: boolean;
 }
 
 export const EMPTY_ROUTE: Route = {
-  entry: null, comp: null, asymId: null, sigma: null, diff: null, target: null, compare: null,
+  entry: null, comp: null, asymId: null, sigma: null, diff: null, target: null, compare: null, local: false,
 };
 
 export function parseRoute(hash: string): Route {
@@ -39,6 +41,8 @@ export function parseRoute(hash: string): Route {
   const sigmaRaw = params.get('s');
   const sigma = sigmaRaw !== null && Number.isFinite(Number(sigmaRaw)) ? Number(sigmaRaw) : null;
   const diffRaw = params.get('d');
+
+  if (parts[0] === 'local') return { ...EMPTY_ROUTE, local: true, sigma };
 
   if (parts[0] === 't' && parts[1]) {
     return { ...EMPTY_ROUTE, target: parts[1].toUpperCase() };
@@ -70,6 +74,7 @@ export function parseRoute(hash: string): Route {
 }
 
 export function buildHash(route: Partial<Route>): string {
+  if (route.local) return '#local';
   if (route.compare?.length === 2) {
     const seg = route.compare
       .map((c) => `${c.entry.toLowerCase()}/${c.comp.toUpperCase()}/${c.asymId}`)
@@ -92,3 +97,4 @@ export function buildHash(route: Partial<Route>): string {
   const q = params.toString();
   return `#${path}${q ? `?${q}` : ''}`;
 }
+
