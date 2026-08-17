@@ -196,7 +196,7 @@ export default function App() {
         <div className="masthead-row">
           <div>
             <h1><a href="#" onClick={() => navigate({ entry: null, comp: null, asymId: null, target: null, compare: null })}>Nullius</a></h1>
-            <p className="motto" title="Nullius in verba — the Royal Society's motto since 1660">take nobody’s word for it</p>
+            <p className="motto" title="Nullius in verba — the Royal Society's motto since 1660">Per-atom density evidence for every ligand in the PDB</p>
             <p className="lede">
               When a structure is published, every atom in the picture looks equally certain.
               It isn’t. The experiment measures electron density; a person decides where the atoms go.
@@ -325,6 +325,7 @@ export default function App() {
     </div>
   );
 }
+
 
 
 

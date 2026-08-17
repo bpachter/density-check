@@ -1,26 +1,27 @@
-# Density Check
+# Nullius
 
-**What did the experiment actually see?**
+**Per-atom density evidence for every ligand in the PDB.**
 
 When a structure is published, every atom in the picture looks equally certain. It isn't.
 A crystallographic experiment measures *electron density* — a cloud. A person decides where
 the atoms go inside that cloud. Usually they are right. Sometimes the density supports part
 of a molecule and the rest is a reasonable guess, and the guess becomes a citable fact.
 
-Density Check shows you, atom by atom, which parts of a modelled molecule the measurement
-supports — and which were filled in.
+Nullius shows you, atom by atom, which parts of a modelled molecule the measurement
+supports — and which were filled in. Named for `nullius in verba` — take nobody's word for it.
 
 <p align="center">
-  <img src="docs/media/compare.png" alt="Two ligands side by side: retinoic acid threading through a dense measured electron-density cloud, and N-acetylglucosamine floating in near-empty space with hollow unsupported atoms" width="900">
+  <img src="docs/media/target.png" alt="Nullius showing carbonic anhydrase 2: coverage map, and every ligand ever modelled into it ranked worst-evidence-first" width="900">
 </p>
 
-Left: retinoic acid in 1CBS — the measured density traces the molecule, every atom above 1σ,
-published RSCC 0.949. Right: a glycosylation-site N-acetylglucosamine in 13FL — 21% of its atoms
-sit below 1σ, O4 sits at 0.0σ with −1.8σ of *negative* difference density under it, published
-RSCC 0.503. Same code, same pipeline, opposite verdict.
+Paste a protein and get every ligand ever modelled into it, ranked worst-evidence-first. Open one
+and the electron density is fetched and decoded in your browser, then sampled at every atom.
+Retinoic acid in 1CBS has every atom above 1σ (RSCC 0.949); a glycosylation sugar in 13FL has 21%
+of its atoms below 1σ, with O4 sitting at 0.0σ over −1.8σ of *negative* difference density (RSCC
+0.503). Same code, same pipeline, opposite verdict.
 
 **Type any PDB entry** and every ligand in it is listed worst-supported first. A worked example:
-erlotinib in the EGFR kinase ([`#1m17/AQ4/B`](https://bpachter.github.io/density-check/#1m17/AQ4/B))
+erlotinib in the EGFR kinase ([`#1m17/AQ4/B`](https://bpachter.github.io/nullius/#1m17/AQ4/B))
 has a published RSCC of 0.866 — respectable — but the per-atom view shows its two
 methoxy-ethoxy tail carbons at **0.17σ and 0.18σ** while the quinazoline core sits at 2–3σ. The
 solubilising side chain is disordered and the core is solid, which is exactly what a
@@ -238,3 +239,4 @@ emit-only change; the 1-D version ships first and the confound is visible in the
 ## Licence
 
 MIT. Data from RCSB PDB under CC0 1.0.
+

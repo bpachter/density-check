@@ -174,13 +174,26 @@ export function CoverageMap({ accession, ligands, variant = 'panel' }: Props) {
 
       <p className="cov-lead">
         {coverage && stats ? (
-          <>
-            {coverage.spans.length.toLocaleString()} experimental structures cover this protein
-            {coverage.xrayCount ? ` (${coverage.xrayCount.toLocaleString()} by X-ray)` : ''}, but not evenly:
-            residue <b>{stats.peakResidue}</b> has been solved <b>{stats.peak.toLocaleString()}</b> times over,
-            while the median residue appears in <b>{stats.median.toLocaleString()}</b>.
-            {stats.peak > stats.median * 8 && ' Attention is concentrated in a small part of the sequence; everywhere else, the prediction is effectively what is known.'}
-          </>
+          stats.peak > stats.median * 1.5 ? (
+            <>
+              {coverage.spans.length.toLocaleString()} experimental structures cover this protein
+              {coverage.xrayCount ? ` (${coverage.xrayCount.toLocaleString()} by X-ray)` : ''}, but not evenly:
+              residue <b>{stats.peakResidue}</b> has been solved <b>{stats.peak.toLocaleString()}</b> times over,
+              while the median residue appears in <b>{stats.median.toLocaleString()}</b>.
+              {stats.peak > stats.median * 8 && ' Attention is concentrated in a small part of the sequence; everywhere else, the prediction is effectively what is known.'}
+            </>
+          ) : (
+            // Claiming unevenness where there is none would be exactly the kind
+            // of unearned assertion this tool exists to catch. A small protein
+            // solved many times over is covered end to end, and that is worth
+            // saying plainly.
+            <>
+              {coverage.spans.length.toLocaleString()} experimental structures cover this protein
+              {coverage.xrayCount ? ` (${coverage.xrayCount.toLocaleString()} by X-ray)` : ''}, and evenly:
+              the median residue appears in <b>{stats.median.toLocaleString()}</b> of them. Almost nothing
+              here rests on prediction.
+            </>
+          )
         ) : 'Loading experimental coverage…'}
       </p>
 

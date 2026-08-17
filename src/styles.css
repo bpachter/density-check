@@ -326,9 +326,11 @@ body > #root::before {
 .gallery-card--target .gallery-id { font-size: 15px; }
 
 /* ── masthead motto ───────────────────────────────────────────────── */
+/* A subtitle, not a motto: it is a sentence with a proper noun in it, so no
+   lowercasing and no italics. */
 .motto {
-  margin: -6px 0 14px; font-size: 12px; letter-spacing: 0.1em; text-transform: lowercase;
-  color: var(--muted); font-style: italic;
+  margin: -6px 0 14px; font-size: 13px; letter-spacing: 0.01em;
+  color: var(--muted);
 }
 
 /* ── table filters ────────────────────────────────────────────────── */
