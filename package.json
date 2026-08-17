@@ -34,7 +34,9 @@
     "fixtures": "tsx scripts/make-fixtures.ts",
     "test": "vitest run",
     "index:crawl": "tsx scripts/index/crawl.ts",
-    "index:emit": "tsx scripts/index/emit.ts"
+    "index:emit": "tsx scripts/index/emit.ts",
+    "index:crawl-em": "tsx scripts/index/crawl-em.ts",
+    "index:emit-em": "tsx scripts/index/emit-em.ts"
   },
   "description": "Per-atom electron-density evidence for ligands in the PDB",
   "license": "MIT"

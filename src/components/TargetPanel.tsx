@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CoverageMap } from './CoverageMap';
+import { EmSection } from './EmSection';
 import { fetchTarget, loadMeta, type TargetResult, type TargetLigand, type IndexMeta } from '../lib/targetIndex';
 
 interface Props {
@@ -272,6 +273,8 @@ export function TargetPanel({ accession, onOpenLigand, onCompare }: Props) {
         <p className="footnote">Showing the worst 300 of {visible.length.toLocaleString()}.</p>
       )}
 
+      <EmSection accession={d.accession} />
+
       <p className="footnote">
         Ranked by where each ligand's RSCC falls within the distribution for its own resolution shell —
         raw RSCC is resolution-dependent, so sorting on it directly ranks by resolution instead of by fit.
@@ -282,4 +285,5 @@ export function TargetPanel({ accession, onOpenLigand, onCompare }: Props) {
     </section>
   );
 }
+
 

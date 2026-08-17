@@ -134,6 +134,97 @@ function percentileOf(
   return { value: (table[q] / 65535) * 100, basis: 'resolution' };
 }
 
+// ── cryo-EM, deliberately a separate lookup ─────────────────────────
+// Q-score measures how well an atom sits in a cryo-EM potential map;
+// RSCC measures correlation with a crystallographic map. Every instance has
+// one or the other, never both, and the two are not on a common scale. So this
+// is a parallel index and a parallel ranking, and the UI shows them apart.
+
+export interface EmLigand {
+  entry: string;
+  emdb: string;
+  comp: string;
+  compName: string | null;
+  chain: string;
+  seq: number;
+  qScore: number | null;
+  resolution: number | null;
+  year: number | null;
+  isSubject: boolean;
+  isAdditive: boolean;
+  targets: number;
+  /** Percentile of this Q-score among EM ligands at comparable resolution. */
+  percentile: number | null;
+}
+
+export interface EmMeta {
+  v: number;
+  metric: string;
+  shells: number[];
+  counts: Record<string, number>;
+  reference: { rule: string; perShell: number[]; minPerShell: number };
+  cdfQ: number[][];
+}
+
+let emMetaPromise: Promise<EmMeta | null> | null = null;
+
+function loadEmMeta(): Promise<EmMeta | null> {
+  emMetaPromise ??= fetch(`${BASE}em-meta.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return emMetaPromise;
+}
+
+function emShellOf(shells: number[], resolution: number | null): number {
+  if (resolution === null || !Number.isFinite(resolution)) return shells.length;
+  for (let i = 0; i < shells.length; i++) if (resolution < shells[i]) return i;
+  return shells.length;
+}
+
+export async function fetchEmTarget(accession: string): Promise<EmLigand[]> {
+  const acc = accession.toUpperCase();
+  const [meta, shard] = await Promise.all([
+    loadEmMeta(),
+    fetch(`${BASE}em/${ligandShard(acc)}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const range = shard?.A?.[acc];
+  if (!range || !meta) return [];
+
+  const [start, count] = range;
+  const comps = await loadComps().catch(() => ({} as Record<string, [string, number | null]>));
+  const out: EmLigand[] = [];
+
+  for (let i = start; i < start + count; i++) {
+    const q = shard.q[i];
+    const resolution = shard.R[i] === 65535 ? null : shard.R[i] / 100;
+    const table = meta.cdfQ[emShellOf(meta.shells, resolution)];
+    const comp = shard.C[shard.c[i]];
+    out.push({
+      entry: shard.E[shard.e[i]],
+      emdb: shard.M?.[shard.m[i]] ?? '',
+      comp,
+      compName: comps[comp]?.[0] ?? null,
+      chain: shard.h[i],
+      seq: shard.s[i],
+      qScore: dequantiseRscc(q),
+      resolution,
+      year: shard.y[i] === ABSENT ? null : shard.y[i] + 1970,
+      isSubject: (shard.f[i] & FLAG_SOI) !== 0,
+      isAdditive: (shard.f[i] & FLAG_ADDITIVE) !== 0,
+      targets: shard.g[i],
+      percentile: table?.length && table[254] !== 0 ? (table[q] / 65535) * 100 : null,
+    });
+  }
+
+  out.sort((a, b) => {
+    const an = a.percentile === null, bn = b.percentile === null;
+    if (an !== bn) return an ? 1 : -1;
+    if (!an && !bn && a.percentile !== b.percentile) return a.percentile! - b.percentile!;
+    return (a.qScore ?? 1) - (b.qScore ?? 1);
+  });
+  return out;
+}
+
+export { loadEmMeta };
+
 export async function fetchTarget(accession: string): Promise<TargetResult | null> {
   const acc = accession.toUpperCase();
   const [meta, shard] = await Promise.all([loadMeta(), loadShard('lig', ligandShard(acc))]);

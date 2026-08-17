@@ -509,3 +509,15 @@ body > #root::before {
 .controls .check { min-height: 24px; }
 .controls input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; }
 .trow { min-height: 30px; }
+
+/* ── cryo-EM section ──────────────────────────────────────────────── */
+.em { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); }
+.em-lead { font-size: 13px; line-height: 1.6; color: var(--muted); margin: 0 0 14px; max-width: 82ch; }
+.em-lead b { color: var(--text); }
+.thead--em, .trow--em { grid-template-columns: 66px 74px minmax(0, 1fr) 74px 68px 74px; }
+.trow--em { text-decoration: none; }
+.trow--em:hover { background: var(--surface-2); }
+@media (max-width: 760px) {
+  .thead--em, .trow--em { grid-template-columns: 58px 62px 60px 58px 62px; }
+  .thead--em span:nth-child(3) { display: none; }
+}

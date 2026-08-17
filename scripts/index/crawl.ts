@@ -226,8 +226,10 @@ async function main(): Promise<void> {
   console.log(`crawl complete in ${((Date.now() - started) / 1000 / 60).toFixed(1)} min`);
 }
 
-// Only run when invoked directly; forEachEntry is imported by the emitter.
-if (process.argv[1] && process.argv[1].includes('crawl')) {
+// Only run when invoked directly; forEachEntry is imported by the emitter and
+// by crawl-em. The check must be exact: `includes('crawl')` also matches
+// `crawl-em.ts`, which silently re-ran this entire pass on import.
+if (process.argv[1] && /[\\/]crawl\.ts$/.test(process.argv[1])) {
   main().catch((e) => { console.error(e); process.exit(1); });
 }
 
