@@ -30,7 +30,8 @@
     "typecheck": "tsc --noEmit",
     "verify": "tsx scripts/verify.ts",
     "crossvalidate": "tsx scripts/crossvalidate.ts",
-    "fixtures": "tsx scripts/make-fixtures.ts"
+    "fixtures": "tsx scripts/make-fixtures.ts",
+    "test": "vitest run"
   },
   "description": "Per-atom electron-density evidence for ligands in the PDB",
   "license": "MIT"
