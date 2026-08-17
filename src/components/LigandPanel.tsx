@@ -145,14 +145,14 @@ export function LigandPanel({ entryId, ligand, resolution, sigma, showDiff, onSi
 
           <h3 className="section-title">Per-atom evidence</h3>
           <div className="bars">
-            {[...d.evidence.atoms].sort((a, b) => a.sigma2FoFc - b.sigma2FoFc).map((a) => {
+            {[...d.evidence.atoms].sort((a, b) => a.sigma2FoFc - b.sigma2FoFc).map((a, ai) => {
               const max = Math.max(4, ...d.evidence.atoms.map((x) => (Number.isFinite(x.sigma2FoFc) ? x.sigma2FoFc : 0)));
               const weak = a.sigma2FoFc < 1;
               const refuted = a.sigmaFoFc < -3;
               return (
                 <div
                   className={`bar-row${hovered === a.name ? ' is-hover' : ''}`}
-                  key={a.name}
+                  key={`${a.name}#${ai}`}
                   onMouseEnter={() => setHovered(a.name)}
                   onMouseLeave={() => setHovered(null)}
                 >
@@ -180,8 +180,8 @@ export function LigandPanel({ entryId, ligand, resolution, sigma, showDiff, onSi
           {d.contacts.length > 0 ? (
             <>
               <div className="contacts">
-                {d.contacts.slice(0, 14).map((c) => (
-                  <div className={`contact contact--${contactTone(c.types)}`} key={`${c.chain}${c.seq}${c.residue}`}>
+                {d.contacts.slice(0, 14).map((c, ci) => (
+                  <div className={`contact contact--${contactTone(c.types)}`} key={`${c.chain}${c.seq}${c.residue}#${ci}`}>
                     <span className="contact-res">
                       {c.residue}<i>{c.chain}{c.seq}</i>
                     </span>

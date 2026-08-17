@@ -21,6 +21,69 @@ body {
   color: var(--text);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* ── the ground ───────────────────────────────────────────────────────
+   Three slow radial fields drifting against each other. Fixed-position and
+   transform/opacity only, so the compositor handles it on its own layer and
+   the main thread never touches it — the 3D views and the index parsing keep
+   the frame budget. Deliberately dim: this is a room the data sits in, not a
+   thing to look at. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: -30vmax;
+  z-index: -2;
+  pointer-events: none;
+  will-change: transform;
+}
+body::before {
+  background:
+    radial-gradient(38vmax 34vmax at 22% 18%, rgba(46, 128, 178, 0.20), transparent 62%),
+    radial-gradient(30vmax 30vmax at 78% 26%, rgba(86, 66, 168, 0.16), transparent 66%);
+  animation: drift-a 68s ease-in-out infinite alternate;
+}
+body::after {
+  background:
+    radial-gradient(34vmax 32vmax at 66% 76%, rgba(30, 120, 140, 0.16), transparent 64%),
+    radial-gradient(26vmax 26vmax at 30% 84%, rgba(60, 90, 190, 0.13), transparent 68%);
+  animation: drift-b 91s ease-in-out infinite alternate;
+}
+
+/* A faint grain over the gradients: without it, wide flat washes band badly on
+   8-bit displays, which reads as a rendering bug rather than a background. */
+body > #root::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@keyframes drift-a {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(3vmax, -2vmax, 0) scale(1.06); }
+  100% { transform: translate3d(-2vmax, 3vmax, 0) scale(1.02); }
+}
+@keyframes drift-b {
+  0%   { transform: translate3d(0, 0, 0) scale(1.04); }
+  50%  { transform: translate3d(-3vmax, 2vmax, 0) scale(1); }
+  100% { transform: translate3d(2vmax, -3vmax, 0) scale(1.07); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before, body::after { animation: none; }
+}
+
+/* Panels sit on the moving ground rather than hiding it completely. */
+.panel, .chooser, .gate, .hero, .primer, .gallery-card, .step-shot {
+  backdrop-filter: blur(6px);
+  background-color: color-mix(in srgb, var(--surface) 86%, transparent);
 }
 
 .app { max-width: 1500px; margin: 0 auto; padding: 40px 28px 80px; }
@@ -261,6 +324,67 @@ body {
   padding: 1px 5px; text-align: center;
 }
 .gallery-card--target .gallery-id { font-size: 15px; }
+
+/* ── masthead motto ───────────────────────────────────────────────── */
+.motto {
+  margin: -6px 0 14px; font-size: 12px; letter-spacing: 0.1em; text-transform: lowercase;
+  color: var(--muted); font-style: italic;
+}
+
+/* ── table filters ────────────────────────────────────────────────── */
+.tfilters {
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+  padding: 11px 12px; margin-bottom: 12px;
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+.tf { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); min-height: 24px; }
+.tf select, .tf input[type="search"] {
+  background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  font-family: var(--sans); font-size: 12px; padding: 5px 8px; min-height: 26px;
+}
+.tf select:focus, .tf input:focus { outline: none; border-color: var(--accent); }
+.tf--search { flex: 1 1 190px; }
+.tf--search input { width: 100%; }
+.tf--check { cursor: pointer; }
+.tf--check input { width: 16px; height: 16px; }
+.tf-count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* ── compare ──────────────────────────────────────────────────────── */
+.compare-bar {
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center;
+  padding: 10px 12px; margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.compare-label { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.compare-chip {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 24px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+  font-family: var(--mono); font-size: 11.5px; padding: 4px 9px; cursor: pointer;
+}
+.compare-chip b { font-weight: 400; color: var(--accent); }
+.compare-chip i { font-style: normal; color: var(--muted); }
+.compare-chip:hover i { color: var(--bad); }
+.compare-go {
+  margin-left: auto; min-height: 26px;
+  background: var(--accent); border: 0; color: #06222e;
+  font-family: var(--sans); font-size: 12px; font-weight: 600; padding: 6px 14px; cursor: pointer;
+}
+.compare-head { display: flex; gap: 16px; align-items: baseline; flex-wrap: wrap; margin-bottom: 16px; }
+.compare-head .muted { flex: 1 1 380px; font-size: 12px; line-height: 1.55; }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 20px; align-items: start; }
+.compare-grid .panel--single .split { grid-template-columns: 1fr; }
+.compare-grid .canvas-mount { height: 320px; }
+
+.trow-wrap { display: flex; align-items: stretch; border-bottom: 1px solid color-mix(in srgb, var(--text) 6%, transparent); }
+.trow-wrap .trow { border-bottom: 0; flex: 1 1 auto; }
+.trow-wrap.is-pinned { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.trow-pin {
+  flex: none; width: 28px; min-height: 30px; background: transparent; border: 0;
+  color: var(--muted); font-size: 12px; cursor: pointer;
+}
+.trow-pin[aria-pressed="true"] { color: var(--accent); }
+.trow-pin:hover { color: var(--text); }
 
 /* ── coverage map ─────────────────────────────────────────────────── */
 .cov { position: relative; margin: 4px 0 22px; }

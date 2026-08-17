@@ -101,3 +101,22 @@ export function shellOf(resolution: number | null): number {
   for (let i = 0; i < SHELL_EDGES.length; i++) if (resolution < SHELL_EDGES[i]) return i;
   return SHELL_EDGES.length;
 }
+
+/**
+ * Ligand size buckets, by the atom count the density server actually scored.
+ *
+ * RSCC depends on size as well as resolution: a 6-atom fragment can sit in
+ * noise and still correlate well, while a 60-atom macrocycle has far more
+ * ways to be wrong. Ranking on resolution alone therefore flatters small
+ * ligands and punishes large ones. These buckets are the second axis.
+ */
+export const SIZE_EDGES = [10, 20, 35];
+
+export function sizeOf(natoms: number | null): number {
+  if (natoms === null || !Number.isFinite(natoms) || natoms === ABSENT) return SIZE_EDGES.length;
+  for (let i = 0; i < SIZE_EDGES.length; i++) if (natoms < SIZE_EDGES[i]) return i;
+  return SIZE_EDGES.length;
+}
+
+export const SIZE_LABELS = ['< 10 atoms', '10–19 atoms', '20–34 atoms', '35+ atoms'];
+export const N_SIZE_BUCKETS = SIZE_EDGES.length + 1;

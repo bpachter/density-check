@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { forEachEntry } from './crawl';
 import {
   LIGAND_BUCKETS, NAME_BUCKETS, ligandShard, nameShard, normaliseName,
-  quantiseRscc, quantiseUnit, shellOf, SHELL_EDGES, ADDITIVES, ABSENT,
+  quantiseRscc, quantiseUnit, shellOf, sizeOf, SHELL_EDGES, N_SIZE_BUCKETS, SIZE_EDGES, ADDITIVES, ABSENT,
   FLAG_SOI, FLAG_HAS_RSCC, FLAG_XRAY, FLAG_EM, FLAG_OTHER_METHOD,
   FLAG_ADDITIVE, FLAG_BEST_INSTANCE, FLAG_PRIMARY_TARGET,
 } from '../../src/lib/bucket';
@@ -45,6 +45,7 @@ interface Row {
 }
 
 const MIN_REF_PER_SHELL = 2000;
+const MIN_REF_PER_CELL = 500;   // below this a 99-point distribution is noise
 
 function methodFlag(method: string | null | undefined): number {
   const m = (method ?? '').toUpperCase();
@@ -208,26 +209,59 @@ async function main(): Promise<void> {
     refByShell[shellOf(r.resolution === 65535 ? null : r.resolution / 100)].push(r.rscc);
   }
 
+  /** Mid-rank CDF over quantised RSCC. A large tied mass must not collapse to 100%. */
+  const cdfOf = (vals: number[]): number[] => {
+    const counts = new Array(255).fill(0);
+    for (const v of vals) if (v !== ABSENT) counts[v]++;
+    const table = new Array(255).fill(0);
+    let cum = 0;
+    for (let q = 0; q < 255; q++) {
+      table[q] = Math.round(((cum + 0.5 * counts[q]) / vals.length) * 65535);
+      cum += counts[q];
+    }
+    return table;
+  };
+
   const cdf: number[][] = [];
   const shellCounts: number[] = [];
   for (let s = 0; s < refByShell.length; s++) {
     const vals = refByShell[s];
     shellCounts.push(vals.length);
-    const counts = new Array(255).fill(0);
-    for (const v of vals) if (v !== ABSENT) counts[v]++;
-    const n = vals.length;
-    const table = new Array(255).fill(0);
-    if (n >= MIN_REF_PER_SHELL) {
-      let cum = 0;
-      for (let q = 0; q < 255; q++) {
-        // Mid-rank: a large tied mass must not collapse to 100%.
-        table[q] = Math.round(((cum + 0.5 * counts[q]) / n) * 65535);
-        cum += counts[q];
-      }
-    }
-    cdf.push(table);
+    cdf.push(vals.length >= MIN_REF_PER_SHELL ? cdfOf(vals) : new Array(255).fill(0));
   }
   console.log(`reference population per shell: ${shellCounts.join(', ')}`);
+
+  // ── second axis: ligand SIZE ──
+  // RSCC depends on how many atoms are being correlated, not just resolution.
+  // Where a (shell, size) cell has enough reference ligands of its own, rank
+  // against that cell; where it does not, fall back to the 1-D shell table
+  // rather than inventing a distribution from a handful of ligands.
+  const refByCell: number[][][] = Array.from({ length: SHELL_EDGES.length + 1 }, () =>
+    Array.from({ length: N_SIZE_BUCKETS }, () => [] as number[]));
+  for (const r of rows) {
+    if (!(r.flags & FLAG_XRAY) || !(r.flags & FLAG_HAS_RSCC) || !(r.flags & FLAG_SOI)) continue;
+    if (!(r.flags & FLAG_PRIMARY_TARGET)) continue;
+    const s = shellOf(r.resolution === 65535 ? null : r.resolution / 100);
+    const z = sizeOf(r.natoms === ABSENT ? null : r.natoms);
+    refByCell[s][z].push(r.rscc);
+  }
+
+  const cdf2: Array<Array<number[] | null>> = [];
+  const cellCounts: number[][] = [];
+  let cellsBuilt = 0;
+  for (let s = 0; s < refByCell.length; s++) {
+    const row: Array<number[] | null> = [];
+    const counts: number[] = [];
+    for (let z = 0; z < N_SIZE_BUCKETS; z++) {
+      const vals = refByCell[s][z];
+      counts.push(vals.length);
+      if (vals.length >= MIN_REF_PER_CELL) { row.push(cdfOf(vals)); cellsBuilt++; }
+      else row.push(null);
+    }
+    cdf2.push(row);
+    cellCounts.push(counts);
+  }
+  console.log(`size-stratified cells: ${cellsBuilt} of ${refByCell.length * N_SIZE_BUCKETS} have >= ${MIN_REF_PER_CELL} references`);
 
   // ── shard the rows ──
   await rm(OUT, { recursive: true, force: true });
@@ -318,13 +352,15 @@ async function main(): Promise<void> {
     buckets: { lig: LIGAND_BUCKETS, name: NAME_BUCKETS },
     hash: 'fnv1a32',
     shells: SHELL_EDGES,
+    sizes: SIZE_EDGES,
     counts: {
       entries: stats.entries, missingEntries: stats.missing, instances,
       unattributed, rows: rows.length, accessions: display.size,
       shards: byShard.size, comps: compName.size,
     },
-    reference: { rule: 'X-ray AND RSCC present AND is_subject_of_investigation=Y', perShell: shellCounts, minPerShell: MIN_REF_PER_SHELL },
+    reference: { rule: 'X-ray AND RSCC present AND is_subject_of_investigation=Y', perShell: shellCounts, minPerShell: MIN_REF_PER_SHELL, perCell: cellCounts, minPerCell: MIN_REF_PER_CELL },
     cdfRscc: cdf,
+    cdfRsccBySize: cdf2,
   };
   await writeFile(join(OUT, 'meta.json'), JSON.stringify(meta));
   console.log(`meta.json: ${(JSON.stringify(meta).length / 1024).toFixed(0)} KB`);
@@ -332,4 +368,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
+
 

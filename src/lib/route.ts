@@ -19,10 +19,12 @@ export interface Route {
   diff: boolean | null;
   /** UniProt accession for a whole-target view: #t/P00918 */
   target: string | null;
+  /** Two ligands side by side: #x/1m17/AQ4/B/3ptb/BEN/C */
+  compare: Array<{ entry: string; comp: string; asymId: string }> | null;
 }
 
 export const EMPTY_ROUTE: Route = {
-  entry: null, comp: null, asymId: null, sigma: null, diff: null, target: null,
+  entry: null, comp: null, asymId: null, sigma: null, diff: null, target: null, compare: null,
 };
 
 export function parseRoute(hash: string): Route {
@@ -42,6 +44,17 @@ export function parseRoute(hash: string): Route {
     return { ...EMPTY_ROUTE, target: parts[1].toUpperCase() };
   }
 
+  if (parts[0] === 'x' && parts.length >= 7) {
+    return {
+      ...EMPTY_ROUTE,
+      sigma, diff: diffRaw === null ? null : diffRaw === '1',
+      compare: [
+        { entry: parts[1].toLowerCase(), comp: parts[2].toUpperCase(), asymId: parts[3] },
+        { entry: parts[4].toLowerCase(), comp: parts[5].toUpperCase(), asymId: parts[6] },
+      ],
+    };
+  }
+
   // Same rule as the search box: a PDB id starts with a digit.
   const entry = /^[0-9][0-9a-zA-Z]{3}$/.test(parts[0]) ? parts[0].toLowerCase() : null;
   if (!entry) return EMPTY_ROUTE;
@@ -57,6 +70,16 @@ export function parseRoute(hash: string): Route {
 }
 
 export function buildHash(route: Partial<Route>): string {
+  if (route.compare?.length === 2) {
+    const seg = route.compare
+      .map((c) => `${c.entry.toLowerCase()}/${c.comp.toUpperCase()}/${c.asymId}`)
+      .join('/');
+    const params = new URLSearchParams();
+    if (route.sigma != null) params.set('s', route.sigma.toFixed(1));
+    if (route.diff != null) params.set('d', route.diff ? '1' : '0');
+    const q = params.toString();
+    return `#x/${seg}${q ? `?${q}` : ''}`;
+  }
   if (route.target) return `#t/${route.target.toUpperCase()}`;
   if (!route.entry) return '#';
   let path = route.entry.toLowerCase();

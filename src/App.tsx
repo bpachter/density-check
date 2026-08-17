@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LigandPanel } from './components/LigandPanel';
 import { TargetPanel } from './components/TargetPanel';
 import { Landing } from './components/Landing';
+import { CompareView } from './components/CompareView';
 import { resolveTarget } from './lib/targetIndex';
 import { fetchEntry, hasDensity, isAdditive, type EntrySummary, type LigandInstance } from './lib/entry';
 import { runValidationGate, type GateResult } from './lib/gate';
@@ -193,7 +194,8 @@ export default function App() {
       <header className="masthead">
         <div className="masthead-row">
           <div>
-            <h1><a href="#" onClick={() => navigate({ entry: null, comp: null, asymId: null })}>Density Check</a></h1>
+            <h1><a href="#" onClick={() => navigate({ entry: null, comp: null, asymId: null, target: null, compare: null })}>Nullius</a></h1>
+            <p className="motto" title="Nullius in verba — the Royal Society's motto since 1660">take nobody’s word for it</p>
             <p className="lede">
               When a structure is published, every atom in the picture looks equally certain.
               It isn’t. The experiment measures electron density; a person decides where the atoms go.
@@ -228,11 +230,23 @@ export default function App() {
         <>
           {searchError && <p className="error">{searchError}</p>}
 
+          {route.compare && (
+            <CompareView
+              pair={route.compare}
+              sigma={route.sigma ?? 1.2}
+              showDiff={route.diff ?? true}
+              onSigma={(s) => navigate({ sigma: s })}
+              onDiff={(d) => navigate({ diff: d })}
+              onBack={() => window.history.back()}
+            />
+          )}
+
           {route.target && (
             <TargetPanel
               key={route.target}
               accession={route.target}
               onOpenLigand={(entry, comp) => navigate({ target: null, entry: entry.toLowerCase(), comp, asymId: null })}
+              onCompare={(compare) => navigate({ target: null, compare })}
             />
           )}
 
@@ -274,7 +288,7 @@ export default function App() {
             </>
           )}
 
-          {!entry && !entryLoading && !route.target && (
+          {!entry && !entryLoading && !route.target && !route.compare && (
             <Landing
               onTarget={(accession) => navigate({ target: accession })}
               onLigand={(e, comp, asym) => navigate({ entry: e, comp, asymId: asym, target: null })}
@@ -302,4 +316,6 @@ export default function App() {
     </div>
   );
 }
+
+
 

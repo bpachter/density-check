@@ -12,7 +12,7 @@
 
 import {
   ligandShard, nameShard, normaliseName, looksLikeAccession,
-  dequantiseRscc, dequantiseUnit, shellOf, ABSENT,
+  dequantiseRscc, dequantiseUnit, shellOf, sizeOf, ABSENT,
   FLAG_SOI, FLAG_HAS_RSCC, FLAG_XRAY, FLAG_EM, FLAG_ADDITIVE, FLAG_PRIMARY_TARGET,
 } from './bucket';
 
@@ -23,6 +23,8 @@ export interface IndexMeta {
   counts: Record<string, number>;
   reference: { rule: string; perShell: number[]; minPerShell: number };
   cdfRscc: number[][];
+  cdfRsccBySize?: Array<Array<number[] | null>>;
+  sizes?: number[];
 }
 
 export interface TargetLigand {
@@ -43,8 +45,10 @@ export interface TargetLigand {
   isPrimary: boolean;
   isXray: boolean;
   isEm: boolean;
-  /** Percentile of this RSCC within its resolution shell, 0..100. Null = unscored. */
+  /** Percentile among comparable ligands, 0..100. Null = unscored. */
   percentile: number | null;
+  /** Whether that percentile is size-aware or resolution-only. */
+  percentileBasis: 'size' | 'resolution' | null;
 }
 
 export interface TargetResult {
@@ -105,15 +109,29 @@ export async function resolveTarget(input: string): Promise<string[]> {
   return shard?.n?.[key] ?? [];
 }
 
-/** Percentile of a quantised RSCC within its shell, from the build-time CDF. */
-function percentileOf(meta: IndexMeta, q: number, resolutionHundredths: number): number | null {
+/**
+ * Percentile of a quantised RSCC among comparable ligands.
+ *
+ * Comparable means same resolution shell AND same size bucket where the index
+ * has enough reference ligands for that cell — RSCC depends on how many atoms
+ * are being correlated, so a 6-atom fragment and a 60-atom macrocycle are not
+ * judged against each other. Where a cell is thin, this falls back to the
+ * resolution-only table rather than inventing a distribution, and reports
+ * which basis it used so the UI can say so.
+ */
+function percentileOf(
+  meta: IndexMeta, q: number, resolutionHundredths: number, natoms: number,
+): { value: number; basis: 'size' | 'resolution' } | null {
   if (q === ABSENT) return null;
   const shell = shellOf(resolutionHundredths === 65535 ? null : resolutionHundredths / 100);
+
+  const cell = meta.cdfRsccBySize?.[shell]?.[sizeOf(natoms === ABSENT ? null : natoms)];
+  if (cell?.length) return { value: (cell[q] / 65535) * 100, basis: 'size' };
+
   const table = meta.cdfRscc[shell];
   if (!table?.length) return null;
-  const raw = table[q];
-  if (raw === 0 && table[254] === 0) return null;   // shell had too few references
-  return (raw / 65535) * 100;
+  if (table[254] === 0) return null;                // shell had too few references
+  return { value: (table[q] / 65535) * 100, basis: 'resolution' };
 }
 
 export async function fetchTarget(accession: string): Promise<TargetResult | null> {
@@ -136,6 +154,7 @@ export async function fetchTarget(accession: string): Promise<TargetResult | nul
     const resolution = shard.R[i] === 65535 ? null : shard.R[i] / 100;
     const q = shard.q[i];
     const isAdditive = (flags & FLAG_ADDITIVE) !== 0;
+    const pct = percentileOf(meta, q, shard.R[i], shard.n[i]);
     if (isAdditive) additiveCount++;
     if (!(flags & FLAG_HAS_RSCC)) unscoredCount++;
 
@@ -157,7 +176,8 @@ export async function fetchTarget(accession: string): Promise<TargetResult | nul
       isPrimary: (flags & FLAG_PRIMARY_TARGET) !== 0,
       isXray: (flags & FLAG_XRAY) !== 0,
       isEm: (flags & FLAG_EM) !== 0,
-      percentile: percentileOf(meta, q, shard.R[i]),
+      percentile: pct?.value ?? null,
+      percentileBasis: pct?.basis ?? null,
     });
   }
 
@@ -186,3 +206,4 @@ function compare(a: TargetLigand, b: TargetLigand): number {
   }
   return a.entry.localeCompare(b.entry) || a.chain.localeCompare(b.chain) || a.seq - b.seq;
 }
+
