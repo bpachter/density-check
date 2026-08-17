@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DensityCanvas } from './DensityCanvas';
+import { Depiction2D } from './Depiction2D';
 import { fetchLigand, fetchSurroundings, fetchDensity } from '../lib/rcsb';
 import { fetchContacts, contactTone, type Contact } from '../lib/contacts';
 import { buildReference, computeEvidence, verdict, type LigandEvidence } from '../lib/evidence';
@@ -136,6 +137,12 @@ export function LigandPanel({ entryId, ligand, resolution, sigma, showDiff, onSi
         </div>
 
         <div className="split-data">
+          <Depiction2D
+            compId={ligand.compId}
+            atoms={d.evidence.atoms}
+            highlight={hovered}
+          />
+
           <h3 className="section-title">Per-atom evidence</h3>
           <div className="bars">
             {[...d.evidence.atoms].sort((a, b) => a.sigma2FoFc - b.sigma2FoFc).map((a) => {
