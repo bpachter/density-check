@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CoverageMap } from './CoverageMap';
 import { fetchTarget, loadMeta, type TargetResult, type TargetLigand, type IndexMeta } from '../lib/targetIndex';
 
 interface Props {
@@ -99,6 +100,8 @@ export function TargetPanel({ accession, onOpenLigand }: Props) {
           {worst.percentile !== null && <> — <b>{worst.percentile.toFixed(1)}th percentile</b> among ligands solved at comparable resolution</>}.
         </p>
       )}
+
+      <CoverageMap accession={d.accession} ligands={d.ligands} />
 
       <div className="target-controls">
         <div className="seg">

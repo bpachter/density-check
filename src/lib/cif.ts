@@ -138,19 +138,25 @@ function parseLoop(lines: string[], start: number, block: CifBlock): number {
     if (line === '#') { i++; break; }
     if (line.startsWith('_') || line === 'loop_' || line.startsWith('data_')) break;
     if (raw.startsWith(';')) {
-      throw new Error(
-        `multi-line text field inside loop_${category} — this reader does not ` +
-        `handle it, and guessing would mis-align every column after it`,
-      );
+      // A semicolon-delimited text field is ONE value, however many lines it
+      // spans. AlphaFold's models carry one in loop_pdbx_data_usage (the
+      // licence text), so refusing to parse these means refusing to read the
+      // predicted models at all.
+      let value = raw.slice(1);
+      i++;
+      while (i < lines.length && !lines[i].startsWith(';')) { value += '\n' + lines[i]; i++; }
+      i++; // the closing ';'
+      pending.push(value.trim());
+    } else {
+      pending.push(...tokenize(line));
+      i++;
     }
 
-    pending.push(...tokenize(line));
     // A CIF row may wrap across lines; only commit once a full row is present.
     while (pending.length >= columns.length) {
       const row = pending.splice(0, columns.length);
       for (let c = 0; c < columns.length; c++) values[c].push(row[c]);
     }
-    i++;
   }
 
   if (pending.length) {
