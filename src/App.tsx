@@ -1,28 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LigandPanel } from './components/LigandPanel';
 import { TargetPanel } from './components/TargetPanel';
+import { Landing } from './components/Landing';
 import { resolveTarget } from './lib/targetIndex';
 import { fetchEntry, hasDensity, isAdditive, type EntrySummary, type LigandInstance } from './lib/entry';
 import { runValidationGate, type GateResult } from './lib/gate';
 import { parseRoute, buildHash, type Route } from './lib/route';
-
-// Targets verified present in the built index, with ligand counts from it.
-const TARGETS = [
-  { accession: 'P00918', gene: 'CA2', label: 'Carbonic anhydrase 2', note: '4,429 ligand instances — the most-liganded target in the PDB' },
-  { accession: 'P00533', gene: 'EGFR', label: 'Epidermal growth factor receptor', note: 'the kinase behind erlotinib and gefitinib' },
-  { accession: 'P24941', gene: 'CDK2', label: 'Cyclin-dependent kinase 2', note: 'a fragment-screening workhorse' },
-  { accession: 'P62942', gene: 'FKBP1A', label: 'FKBP12', note: 'rapamycin, shared with mTOR' },
-];
-
-// Every entry here was checked against the archive: X-ray, deposited structure
-// factors, and the named ligand really is a non-polymer entity with that label
-// asym id. A gallery link that 404s is worse than no gallery.
-const GALLERY = [
-  { entry: '1cbs', comp: 'REA', asym: 'B', label: 'Retinoic acid', note: 'every atom above 1σ — RSCC 0.949' },
-  { entry: '13fl', comp: 'NAG', asym: 'G', label: 'A glycosylation-site sugar', note: '21% of atoms below 1σ — RSCC 0.503' },
-  { entry: '1m17', comp: 'AQ4', asym: 'B', label: 'Erlotinib in the EGFR kinase', note: 'a real drug in its target — RSCC 0.866' },
-  { entry: '3ptb', comp: 'BEN', asym: 'C', label: 'Benzamidine in trypsin', note: 'the textbook complex — RSCC 0.921' },
-];
 
 function useRoute(): [Route, (next: Partial<Route>) => void] {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
@@ -292,42 +275,10 @@ export default function App() {
           )}
 
           {!entry && !entryLoading && !route.target && (
-            <section className="gallery">
-              <h2 className="section-title">Start with a target</h2>
-              <div className="gallery-grid">
-                {TARGETS.map((t) => (
-                  <button
-                    key={t.accession}
-                    type="button"
-                    className="gallery-card gallery-card--target"
-                    onClick={() => navigate({ target: t.accession })}
-                  >
-                    <span className="gallery-id">{t.gene}</span>
-                    <span className="gallery-label">{t.label}</span>
-                    <span className="gallery-note">{t.note}</span>
-                  </button>
-                ))}
-              </div>
-
-              <h2 className="section-title" style={{ marginTop: 30 }}>…or a single ligand</h2>
-              <div className="gallery-grid">
-                {GALLERY.map((g) => (
-                  <button
-                    key={`${g.entry}/${g.comp}`}
-                    type="button"
-                    className="gallery-card"
-                    onClick={() => navigate({ entry: g.entry, comp: g.comp, asymId: g.asym })}
-                  >
-                    <span className="gallery-id">{g.entry.toUpperCase()} · {g.comp}</span>
-                    <span className="gallery-label">{g.label}</span>
-                    <span className="gallery-note">{g.note}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="muted gallery-hint">
-                …or type any PDB entry above. Every ligand in it is listed worst-supported first.
-              </p>
-            </section>
+            <Landing
+              onTarget={(accession) => navigate({ target: accession })}
+              onLigand={(e, comp, asym) => navigate({ entry: e, comp, asymId: asym, target: null })}
+            />
           )}
         </>
       )}
@@ -351,3 +302,4 @@ export default function App() {
     </div>
   );
 }
+

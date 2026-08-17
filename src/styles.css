@@ -268,6 +268,53 @@ body {
 .cov-load:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .cov-load:disabled { opacity: 0.6; cursor: default; }
 
+/* ── landing ──────────────────────────────────────────────────────── */
+.landing { margin-top: 4px; }
+.hero { border: 1px solid var(--line); background: var(--surface); padding: 22px 24px; margin-bottom: 34px; }
+.hero-kicker {
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 14px;
+}
+.hero .cov { margin-bottom: 16px; }
+.hero .cov .section-title { display: none; }
+.hero-read { font-size: 15px; line-height: 1.66; color: color-mix(in srgb, var(--text) 86%, transparent); margin: 0; max-width: 84ch; }
+.hero-read b { color: var(--text); }
+
+.steps { margin-bottom: 40px; }
+.step {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 30px; align-items: center; padding: 26px 0;
+  border-top: 1px solid var(--line);
+}
+.step--flip .step-text { order: 2; }
+.step--flip .step-shot { order: 1; }
+.step-n {
+  font-family: var(--mono); font-size: 11px; color: var(--accent);
+  letter-spacing: 0.08em; display: block; margin-bottom: 8px;
+}
+.step-text h3 { margin: 0 0 10px; font-size: 19px; letter-spacing: -0.01em; }
+.step-text p { font-size: 14.5px; line-height: 1.62; color: color-mix(in srgb, var(--text) 82%, transparent); margin: 0 0 10px; }
+.step-text b { color: var(--text); }
+.step-aside { font-size: 12.5px !important; color: var(--muted) !important; border-left: 2px solid var(--line); padding-left: 12px; }
+.step-shot {
+  padding: 0; background: transparent; border: 1px solid var(--line); cursor: pointer;
+  overflow: hidden; display: block; line-height: 0;
+}
+.step-shot:hover { border-color: var(--accent); }
+.step-shot img { width: 100%; height: auto; display: block; }
+
+.primer { border: 1px solid var(--line); background: var(--surface); padding: 22px 24px; margin-bottom: 34px; }
+.primer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px 28px; }
+.primer h4 { margin: 0 0 7px; font-size: 14px; color: var(--accent); }
+.primer p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.primer b { color: var(--text); }
+
+@media (max-width: 860px) {
+  .step { grid-template-columns: 1fr; gap: 18px; }
+  .step--flip .step-text { order: 1; }
+  .step--flip .step-shot { order: 2; }
+}
+
 /* ── gallery ──────────────────────────────────────────────────────── */
 .gallery { margin-top: 8px; }
 .gallery-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }

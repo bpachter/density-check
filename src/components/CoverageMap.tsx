@@ -8,6 +8,11 @@ import type { TargetLigand } from '../lib/targetIndex';
 interface Props {
   accession: string;
   ligands: TargetLigand[];
+  /** Hero use: load the prediction band immediately and let the page narrate.
+   *  The landing copy points at the low-confidence region, so the band has to
+   *  be there — text describing something the reader cannot see is worse than
+   *  no text. */
+  variant?: 'panel' | 'hero';
 }
 
 const H_DEPTH = 46;
@@ -24,7 +29,7 @@ const PAD = 1;
  * different kinds of claim, and merging them into a single "confidence" would
  * be exactly the dishonesty this tool exists to argue against.
  */
-export function CoverageMap({ accession, ligands }: Props) {
+export function CoverageMap({ accession, ligands, variant = 'panel' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [af, setAf] = useState<AlphaFoldSummary | null | 'none'>(null);
   const [coverage, setCoverage] = useState<Coverage | null>(null);
@@ -42,9 +47,16 @@ export function CoverageMap({ accession, ligands }: Props) {
       const length = summary?.sequenceLength ?? 0;
       const cov = await fetchCoverage(accession, length).catch(() => null);
       if (live) setCoverage(cov);
+
+      if (variant === 'hero' && summary?.cifUrl) {
+        setLoadingPlddt(true);
+        const p = await fetchPlddt(summary.cifUrl).catch(() => null);
+        if (live && p) setPlddt(p.plddt);
+        if (live) setLoadingPlddt(false);
+      }
     })();
     return () => { live = false; };
-  }, [accession]);
+  }, [accession, variant]);
 
   // Entries that carry a scored ligand, so the map can show where the
   // liganded structures actually sit on the sequence.
@@ -227,7 +239,7 @@ export function CoverageMap({ accession, ligands }: Props) {
         )}
       </div>
 
-      <p className="footnote">
+      <p className="footnote" hidden={variant === 'hero'}>
         The upper band is measurement — how many deposited structures cover each residue. The lower band is
         a <b>prediction</b>: AlphaFold's own per-residue confidence, model v{summary.modelVersion ?? '?'}.
         They are drawn separately on purpose. A high pLDDT is a model's belief about a residue, not evidence
