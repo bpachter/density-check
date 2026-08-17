@@ -24,6 +24,10 @@ export interface Atom {
   pos: [number, number, number];
   b: number;
   occupancy: number;
+  /** Residue identity, needed to join against PDBe's residue-level contacts. */
+  compId: string;
+  authSeqId: number;
+  authAsymId: string;
 }
 
 export interface AtomEvidence extends Atom {

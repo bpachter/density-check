@@ -49,6 +49,9 @@ function atomsFromCif(text: string, restrictToFirstAsym: boolean): {
   const asym = loopColumn(site, 'label_asym_id');
   let authAsym: string[] = asym;
   try { authAsym = loopColumn(site, 'auth_asym_id'); } catch { /* optional */ }
+  const compId = loopColumn(site, 'label_comp_id');
+  let authSeq: string[] = [];
+  try { authSeq = loopColumn(site, 'auth_seq_id'); } catch { /* optional */ }
 
   const target = asym[0] ?? '';
   const atoms: Atom[] = [];
@@ -60,21 +63,36 @@ function atomsFromCif(text: string, restrictToFirstAsym: boolean): {
       pos: [Number(x[i]), Number(y[i]), Number(z[i])],
       b: Number(b[i]),
       occupancy: Number(occ[i]),
+      compId: compId[i] ?? '',
+      authSeqId: Number(authSeq[i] ?? NaN),
+      authAsymId: authAsym[i] ?? '',
     });
   }
   return { atoms, asymId: target, authAsymId: authAsym[0] ?? target };
 }
 
-/** Coordinates of one copy of a ligand, by chemical component id (e.g. 'REA'). */
-export async function fetchLigand(entry: string, comp: string): Promise<LigandCoordinates> {
+/**
+ * Coordinates of one copy of a ligand, by chemical component id (e.g. 'REA').
+ * Pass `asymId` to pick a specific copy: an entry with four copies of the same
+ * ligand has four different densities, and averaging them would hide the one
+ * that is wrong — which is the one worth finding.
+ */
+export async function fetchLigand(entry: string, comp: string, asymId?: string): Promise<LigandCoordinates> {
+  const params = new URLSearchParams({ label_comp_id: comp, encoding: 'cif' });
+  if (asymId) params.set('label_asym_id', asymId);
   const text = await fetchText(
-    `${MODELS}/${entry.toLowerCase()}/atoms?label_comp_id=${encodeURIComponent(comp)}&encoding=cif`,
+    `${MODELS}/${entry.toLowerCase()}/atoms?${params.toString()}`,
     `ligand ${entry}/${comp}`,
   );
-  const { atoms, asymId, authAsymId } = atomsFromCif(text, true);
-  if (!atoms.length) throw new Error(`no atoms found for ${comp} in ${entry}`);
+  const parsed = atomsFromCif(text, true);
+  if (!parsed.atoms.length) throw new Error(`no atoms found for ${comp} in ${entry}`);
   const block = parseCif(text);
-  return { atoms, asymId, authAsymId, compName: block.items.get('_entity.pdbx_description') ?? comp };
+  return {
+    atoms: parsed.atoms,
+    asymId: parsed.asymId,
+    authAsymId: parsed.authAsymId,
+    compName: block.items.get('_entity.pdbx_description') ?? comp,
+  };
 }
 
 /** Protein atoms around a ligand — the within-map reference population. */

@@ -15,11 +15,22 @@ supports — and which were filled in.
 </p>
 
 Left: retinoic acid in 1CBS — the measured density traces the molecule, every atom above 1σ,
-published RSCC 0.949. Right: an N-acetylglucosamine in 13FL — 21% of its atoms sit below 1σ,
-O4 sits at 0.0σ with −1.8σ of *negative* difference density under it, published RSCC 0.503.
-Same code, same pipeline, opposite verdict.
+published RSCC 0.949. Right: a glycosylation-site N-acetylglucosamine in 13FL — 21% of its atoms
+sit below 1σ, O4 sits at 0.0σ with −1.8σ of *negative* difference density under it, published
+RSCC 0.503. Same code, same pipeline, opposite verdict.
+
+**Type any PDB entry** and every ligand in it is listed worst-supported first. A worked example:
+erlotinib in the EGFR kinase ([`#1m17/AQ4/B`](https://bpachter.github.io/density-check/#1m17/AQ4/B))
+has a published RSCC of 0.866 — respectable — but the per-atom view shows its two
+methoxy-ethoxy tail carbons at **0.17σ and 0.18σ** while the quinazoline core sits at 2–3σ. The
+solubilising side chain is disordered and the core is solid, which is exactly what a
+medicinal chemist would want to know and exactly what a single summary number hides.
 
 ---
+
+<p align="center">
+  <img src="docs/media/ligand-view.png" alt="Erlotinib in the EGFR kinase: 3D density cloud with contact lines on the left, and every atom ranked by measured support on the right, with the two tail carbons at 0.17 and 0.18 sigma" width="900">
+</p>
 
 ## Why this is not just a viewer
 
@@ -122,10 +133,31 @@ npm run verify          # re-derive the grid convention from physics against liv
 
 ## Status
 
-**Stage 0.** Two reference structures, side by side, to prove the hard part: the decoder, the
-geometry, the per-atom evidence, and the self-check. Next: any entry and any ligand from a URL,
-then a precomputed archive-wide index so you can paste a protein target and get every ligand
-ever modelled into it, ranked worst-evidence-first.
+**Stage 1 — any entry, any ligand, linkable.**
+
+- Type a PDB id; one GraphQL call returns every ligand instance with its published RSCC, sorted
+  worst-supported first, with ions and buffer components tucked away.
+- Pick a specific *copy* of a ligand — an entry with four copies has four different densities,
+  and averaging them hides the one that is wrong.
+- Ligand–environment contacts from PDBe's Arpeggio pipeline, drawn and listed. That endpoint
+  returns contacts at residue level (no atom names), so the distance shown is the closest
+  approach between the ligand and that residue — the UI says so rather than implying atom-level
+  precision it does not have.
+- **All state in the URL**: `#1m17/AQ4/B?s=1.4&d=1` is entry, ligand, copy, contour and
+  difference-map toggle. The permalink is the point — a tool you cannot link into is a tool
+  nobody cites.
+- Non-X-ray entries and covalently-bound ligands say what they are instead of failing: a ligand
+  bonded to the protein is modelled as part of the polymer, so it has no non-polymer entity and
+  does not appear.
+
+**Next.** The stage that turns this from a viewer into a tool is the precomputed index: roughly
+183,000 ligand instances across the archive into a small, sharded, range-addressable file, so
+pasting a UniProt accession returns every ligand ever modelled into that target ranked
+worst-evidence-first in under two seconds. After that: chemical-series clustering with RDKit,
+bring-your-own coordinates and map (nothing uploaded), and an independent reference recomputed
+from deposited structure factors to strip model bias.
+
+Not yet built: the 2D depiction cross-highlighted with the 3D view.
 
 ## Licence
 

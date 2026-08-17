@@ -1,151 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DensityCanvas } from './components/DensityCanvas';
-import { fetchLigand, fetchSurroundings, fetchDensity, fetchValidation, fetchResolution } from './lib/rcsb';
-import { buildReference, computeEvidence, verdict, type LigandEvidence } from './lib/evidence';
+import { LigandPanel } from './components/LigandPanel';
+import { fetchEntry, hasDensity, isAdditive, type EntrySummary, type LigandInstance } from './lib/entry';
 import { runValidationGate, type GateResult } from './lib/gate';
-import type { DensityGrid } from './lib/volume';
+import { parseRoute, buildHash, type Route } from './lib/route';
 
-interface Loaded {
-  evidence: LigandEvidence;
-  map2FoFc: DensityGrid;
-  mapFoFc: DensityGrid;
-  bytes: number;
-  rscc: number | null;
-  resolution: number | null;
-  compName: string;
-}
-
-const CASES = [
-  { entry: '1cbs', comp: 'REA', caption: 'Retinoic acid in cellular retinoic-acid-binding protein II' },
-  { entry: '13fl', comp: 'NAG', caption: 'N-acetylglucosamine in a fucose-specific lectin' },
+// Every entry here was checked against the archive: X-ray, deposited structure
+// factors, and the named ligand really is a non-polymer entity with that label
+// asym id. A gallery link that 404s is worse than no gallery.
+const GALLERY = [
+  { entry: '1cbs', comp: 'REA', asym: 'B', label: 'Retinoic acid', note: 'every atom above 1σ — RSCC 0.949' },
+  { entry: '13fl', comp: 'NAG', asym: 'G', label: 'A glycosylation-site sugar', note: '21% of atoms below 1σ — RSCC 0.503' },
+  { entry: '1m17', comp: 'AQ4', asym: 'B', label: 'Erlotinib in the EGFR kinase', note: 'a real drug in its target — RSCC 0.866' },
+  { entry: '3ptb', comp: 'BEN', asym: 'C', label: 'Benzamidine in trypsin', note: 'the textbook complex — RSCC 0.921' },
 ];
 
-async function load(entry: string, comp: string): Promise<Loaded> {
-  const ligand = await fetchLigand(entry, comp);
-  const [surroundings, maps, validation, resolution] = await Promise.all([
-    fetchSurroundings(entry, comp),
-    fetchDensity(entry, ligand.atoms),
-    fetchValidation(entry, ligand.asymId),
-    fetchResolution(entry),
-  ]);
-  const meanB = ligand.atoms.reduce((s, a) => s + a.b, 0) / ligand.atoms.length;
-  const reference = buildReference(surroundings, maps.map2FoFc, meanB);
-  return {
-    evidence: computeEvidence(entry, comp, ligand.atoms, maps.map2FoFc, maps.mapFoFc, reference),
-    map2FoFc: maps.map2FoFc,
-    mapFoFc: maps.mapFoFc,
-    bytes: maps.bytes,
-    rscc: validation.rscc,
-    resolution,
-    compName: ligand.compName,
-  };
-}
-
-function AtomBars({ evidence }: { evidence: LigandEvidence }) {
-  const max = Math.max(4, ...evidence.atoms.map((a) => (Number.isFinite(a.sigma2FoFc) ? a.sigma2FoFc : 0)));
-  const sorted = [...evidence.atoms].sort((a, b) => a.sigma2FoFc - b.sigma2FoFc);
-
-  return (
-    <div className="bars" role="table" aria-label="Per-atom density support">
-      {sorted.map((a) => {
-        const weak = a.sigma2FoFc < 1;
-        const refuted = a.sigmaFoFc < -3;
-        const pct = Math.max(0, Math.min(100, (a.sigma2FoFc / max) * 100));
-        return (
-          <div className="bar-row" key={a.name} role="row">
-            <span className="bar-name" role="cell">{a.name}<i>{a.element}</i></span>
-            <span className="bar-track" role="cell">
-              <span
-                className={`bar-fill${weak ? ' is-weak' : ''}${refuted ? ' is-refuted' : ''}`}
-                style={{ width: `${pct}%` }}
-              />
-              <span className="bar-onesigma" style={{ left: `${(1 / max) * 100}%` }} aria-hidden="true" />
-            </span>
-            <span className="bar-value" role="cell">{a.sigma2FoFc.toFixed(2)}σ</span>
-            <span className={`bar-diff${a.sigmaFoFc < -1.5 ? ' is-negative' : ''}`} role="cell">
-              {a.sigmaFoFc >= 0 ? '+' : ''}{a.sigmaFoFc.toFixed(2)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function Panel({ entry, comp, caption }: { entry: string; comp: string; caption: string }) {
-  const [state, setState] = useState<{ status: 'loading' | 'ready' | 'error'; data?: Loaded; error?: string }>({ status: 'loading' });
-  const [sigmaLevel, setSigmaLevel] = useState(1.2);
-  const [showDiff, setShowDiff] = useState(true);
+function useRoute(): [Route, (next: Partial<Route>) => void] {
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
 
   useEffect(() => {
-    let live = true;
-    load(entry, comp)
-      .then((data) => { if (live) setState({ status: 'ready', data }); })
-      .catch((e) => { if (live) setState({ status: 'error', error: e instanceof Error ? e.message : String(e) }); });
-    return () => { live = false; };
-  }, [entry, comp]);
+    const onHash = () => setRoute(parseRoute(window.location.hash));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
-  if (state.status === 'loading') {
-    return <section className="panel"><h2>{entry.toUpperCase()} · {comp}</h2><p className="muted">Fetching coordinates and density…</p></section>;
-  }
-  if (state.status === 'error' || !state.data) {
-    return <section className="panel"><h2>{entry.toUpperCase()} · {comp}</h2><p className="error">{state.error}</p></section>;
-  }
+  const navigate = useCallback((next: Partial<Route>) => {
+    const merged = { ...parseRoute(window.location.hash), ...next };
+    const hash = buildHash(merged);
+    if (hash !== window.location.hash) window.location.hash = hash;
+    else setRoute(merged as Route);
+  }, []);
 
-  const d = state.data;
-  const v = verdict(d.evidence);
-  const weakCount = d.evidence.atoms.filter((a) => a.sigma2FoFc < 1).length;
-
-  return (
-    <section className="panel">
-      <header className="panel-head">
-        <div>
-          <h2>{entry.toUpperCase()} · {comp}</h2>
-          <p className="caption">{caption}</p>
-        </div>
-        <span className={`verdict verdict--${v.tone}`}>{v.label}</span>
-      </header>
-
-      <div className="stats">
-        <div><span className="k">Mean density at atoms</span><span className="v">{d.evidence.meanSigma.toFixed(2)}σ</span></div>
-        <div><span className="k">Atoms below 1σ</span><span className="v">{weakCount} / {d.evidence.atoms.length}</span></div>
-        <div><span className="k">Published RSCC</span><span className="v">{d.rscc !== null ? d.rscc.toFixed(3) : '—'}</span></div>
-        <div><span className="k">Resolution</span><span className="v">{d.resolution !== null ? `${d.resolution.toFixed(2)} Å` : '—'}</span></div>
-      </div>
-
-      <DensityCanvas
-        map2FoFc={d.map2FoFc}
-        mapFoFc={d.mapFoFc}
-        atoms={d.evidence.atoms}
-        sigmaLevel={sigmaLevel}
-        showDifference={showDiff}
-      />
-
-      <div className="controls">
-        <label>
-          2Fo−Fc contour
-          <input
-            type="range" min={0.4} max={3} step={0.1} value={sigmaLevel}
-            onChange={(e) => setSigmaLevel(Number(e.target.value))}
-          />
-          <b>{sigmaLevel.toFixed(1)}σ</b>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} />
-          Fo−Fc difference at ±3σ
-        </label>
-      </div>
-
-      <AtomBars evidence={d.evidence} />
-
-      <p className="footnote">
-        {d.evidence.reference
-          ? `Within-map reference: ${d.evidence.reference.n} ordered protein atoms at comparable B-factor.`
-          : 'No comparable reference population in this map — z-scores withheld rather than guessed.'}
-        {' '}Density payload {(d.bytes / 1024).toFixed(0)} KB, fetched directly from RCSB.
-      </p>
-    </section>
-  );
+  return [route, navigate];
 }
 
 function Gate({ result, onRerun }: { result: GateResult | null; onRerun: () => void }) {
@@ -173,43 +58,216 @@ function Gate({ result, onRerun }: { result: GateResult | null; onRerun: () => v
   );
 }
 
+function LigandChooser({
+  entry, selected, onPick,
+}: { entry: EntrySummary; selected: LigandInstance | null; onPick: (l: LigandInstance) => void }) {
+  const real = entry.ligands.filter((l) => !isAdditive(l.compId));
+  const additives = entry.ligands.filter((l) => isAdditive(l.compId));
+
+  const chip = (l: LigandInstance) => {
+    const key = `${l.compId}/${l.asymId}`;
+    const active = selected?.compId === l.compId && selected?.asymId === l.asymId;
+    const tone = l.rscc === null ? '' : l.rscc < 0.6 ? ' chip--bad' : l.rscc < 0.8 ? ' chip--warn' : ' chip--ok';
+    return (
+      <button
+        key={key}
+        type="button"
+        className={`chip${tone}${active ? ' chip--active' : ''}`}
+        onClick={() => onPick(l)}
+        title={`${l.name}${l.rscc !== null ? ` · RSCC ${l.rscc.toFixed(3)}` : ''}`}
+      >
+        {l.compId}
+        <i>{l.asymId}</i>
+        {l.rscc !== null && <b>{l.rscc.toFixed(2)}</b>}
+        {l.isSubjectOfInvestigation && <span className="chip-star" title="the ligand this structure is about">★</span>}
+      </button>
+    );
+  };
+
+  return (
+    <div className="chooser">
+      <div className="chooser-head">
+        <span className="entry-id">{entry.entryId}</span>
+        <span className="entry-title">{entry.title}</span>
+        <span className="entry-meta">
+          {entry.method ?? 'unknown method'}{entry.resolution !== null ? ` · ${entry.resolution.toFixed(2)} Å` : ''}
+        </span>
+      </div>
+      {real.length > 0 && <div className="chips-row">{real.map(chip)}</div>}
+      {additives.length > 0 && (
+        <details className="additives">
+          <summary>{additives.length} ion{additives.length > 1 ? 's' : ''} / buffer component{additives.length > 1 ? 's' : ''}</summary>
+          <div className="chips-row">{additives.map(chip)}</div>
+        </details>
+      )}
+      {!entry.ligands.length && <p className="muted">This entry has no non-polymer ligands.</p>}
+    </div>
+  );
+}
+
 export default function App() {
   const [gate, setGate] = useState<GateResult | null>(null);
+  const [route, navigate] = useRoute();
+  const [entry, setEntry] = useState<EntrySummary | null>(null);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [entryLoading, setEntryLoading] = useState(false);
+  const [query, setQuery] = useState('');
 
   const rerun = useCallback(() => {
     setGate(null);
     runValidationGate().then(setGate);
   }, []);
-
   useEffect(() => { rerun(); }, [rerun]);
 
-  const showPanels = useMemo(() => gate?.ok === true, [gate]);
+  // Entry follows the URL.
+  useEffect(() => {
+    if (!route.entry) { setEntry(null); setEntryError(null); return; }
+    let live = true;
+    setEntryLoading(true);
+    setEntryError(null);
+    // Drop the previous entry immediately. Leaving it mounted lets the
+    // auto-pick effect below choose a ligand from the OLD structure and write
+    // it into the URL of the new one.
+    setEntry(null);
+    fetchEntry(route.entry)
+      .then((e) => { if (live) { setEntry(e); setEntryLoading(false); } })
+      .catch((err) => {
+        if (!live) return;
+        setEntry(null);
+        setEntryLoading(false);
+        setEntryError(err instanceof Error ? err.message : String(err));
+      });
+    return () => { live = false; };
+  }, [route.entry]);
+
+  // Default to the worst-supported real ligand once an entry loads. The
+  // entryId guard matters: without it this fires while `entry` is still the
+  // previously loaded structure and picks one of ITS ligands.
+  useEffect(() => {
+    if (!entry || route.comp) return;
+    if (entry.entryId.toLowerCase() !== route.entry) return;
+    const first = entry.ligands.find((l) => !isAdditive(l.compId)) ?? entry.ligands[0];
+    if (first) navigate({ comp: first.compId, asymId: first.asymId });
+  }, [entry, route.comp, route.entry, navigate]);
+
+  const selected = useMemo<LigandInstance | null>(() => {
+    if (!entry || !route.comp) return null;
+    return entry.ligands.find((l) =>
+      l.compId === route.comp && (!route.asymId || l.asymId === route.asymId))
+      ?? entry.ligands.find((l) => l.compId === route.comp)
+      ?? null;
+  }, [entry, route.comp, route.asymId]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = query.trim();
+    if (!id) return;
+    navigate({ entry: id.toLowerCase(), comp: null, asymId: null });
+    setQuery('');
+  };
+
+  const densityAvailable = entry ? hasDensity(entry.method) : true;
 
   return (
     <div className="app">
       <header className="masthead">
-        <h1>Density Check</h1>
-        <p className="lede">
-          When a structure is published, every atom in the picture looks equally certain.
-          It isn’t. The experiment measures electron density; a person decides where the atoms go.
-          This shows you, atom by atom, <b>which parts of a molecule the measurement actually saw</b>
-          {' '}— and which were filled in.
-        </p>
+        <div className="masthead-row">
+          <div>
+            <h1><a href="#" onClick={() => navigate({ entry: null, comp: null, asymId: null })}>Density Check</a></h1>
+            <p className="lede">
+              When a structure is published, every atom in the picture looks equally certain.
+              It isn’t. The experiment measures electron density; a person decides where the atoms go.
+              This shows you, atom by atom, <b>which parts of a molecule the measurement actually saw</b> — and which were filled in.
+            </p>
+          </div>
+          <form className="search" onSubmit={submit}>
+            <label htmlFor="pdbid">PDB entry</label>
+            <input
+              id="pdbid"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. 6lu7"
+              maxLength={4}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button type="submit">Open</button>
+          </form>
+        </div>
       </header>
 
       <Gate result={gate} onRerun={rerun} />
 
-      {showPanels ? (
-        <main className="panels">
-          {CASES.map((c) => <Panel key={`${c.entry}/${c.comp}`} {...c} />)}
-        </main>
-      ) : (
-        gate && !gate.ok && (
-          <p className="withheld">
-            The pipeline could not reproduce its reference values, so no density numbers are shown.
-            A wrong number here would be worse than none.
-          </p>
-        )
+      {gate && !gate.ok && (
+        <p className="withheld">
+          The pipeline could not reproduce its reference values, so no density numbers are shown.
+          A wrong number here would be worse than none.
+        </p>
+      )}
+
+      {gate?.ok && (
+        <>
+          {entryLoading && <p className="muted">Loading {route.entry?.toUpperCase()}…</p>}
+          {entryError && <p className="error">{entryError}</p>}
+
+          {entry && (
+            <>
+              <LigandChooser
+                entry={entry}
+                selected={selected}
+                onPick={(l) => navigate({ comp: l.compId, asymId: l.asymId })}
+              />
+              {!densityAvailable ? (
+                <p className="withheld">
+                  {entry.entryId} was solved by {entry.method}. This tool reads X-ray electron-density
+                  maps; the equivalent confidence measure for cryo-EM is a different quantity, and
+                  pretending otherwise would be worse than saying so.
+                </p>
+              ) : !selected && route.comp ? (
+                <p className="withheld">
+                  {entry.entryId} has no non-polymer ligand called {route.comp}.
+                  {entry.ligands.length > 0
+                    ? ' Pick one of the ligands above.'
+                    : ' A ligand bound covalently to the protein is modelled as part of the polymer, not as a separate entity, so it does not appear here.'}
+                </p>
+              ) : selected ? (
+                <LigandPanel
+                  key={`${entry.entryId}/${selected.compId}/${selected.asymId}`}
+                  entryId={entry.entryId}
+                  ligand={selected}
+                  resolution={entry.resolution}
+                  sigma={route.sigma ?? 1.2}
+                  showDiff={route.diff ?? true}
+                  onSigma={(s) => navigate({ sigma: s })}
+                  onDiff={(d) => navigate({ diff: d })}
+                />
+              ) : null}
+            </>
+          )}
+
+          {!entry && !entryLoading && (
+            <section className="gallery">
+              <h2 className="section-title">Start somewhere</h2>
+              <div className="gallery-grid">
+                {GALLERY.map((g) => (
+                  <button
+                    key={`${g.entry}/${g.comp}`}
+                    type="button"
+                    className="gallery-card"
+                    onClick={() => navigate({ entry: g.entry, comp: g.comp, asymId: g.asym })}
+                  >
+                    <span className="gallery-id">{g.entry.toUpperCase()} · {g.comp}</span>
+                    <span className="gallery-label">{g.label}</span>
+                    <span className="gallery-note">{g.note}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="muted gallery-hint">
+                …or type any PDB entry above. Every ligand in it is listed worst-supported first.
+              </p>
+            </section>
+          )}
+        </>
       )}
 
       <footer className="colophon">
@@ -222,9 +280,10 @@ export default function App() {
         </p>
         <p className="prior">
           Per-atom density validation is not new: see <a href="https://proteins.plus" target="_blank" rel="noopener">EDIA</a> (Meyder et al., <i>JCIM</i> 2017),
-          Twilight (Weichenberger &amp; Pozharski), and RCSB’s own published ligand-quality scores.
+          Twilight (Weichenberger &amp; Pozharski), PDB-REDO, and RCSB’s own published ligand-quality scores.
           Cross-entry comparisons here use those published RSCC values, not our sigma, which is not comparable between structures.
-          Data from RCSB PDB (CC0 1.0), fetched in the browser. Decoder verified byte-identical to Mol*.
+          Data from RCSB PDB (CC0 1.0) and PDBe, fetched in the browser. Decoder verified byte-identical to Mol*.
+          {' '}<a href="https://github.com/bpachter/density-check" target="_blank" rel="noopener">Source</a>.
         </p>
       </footer>
     </div>

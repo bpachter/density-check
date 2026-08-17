@@ -14,6 +14,12 @@ import * as THREE from 'three';
 import { type DensityGrid, cartesianOfNode, valueAt } from '../lib/volume';
 import type { AtomEvidence } from '../lib/evidence';
 
+interface ContactLine {
+  from: [number, number, number] | null;
+  to: [number, number, number] | null;
+  types: string[];
+}
+
 interface Props {
   map2FoFc: DensityGrid;
   mapFoFc: DensityGrid;
@@ -22,6 +28,10 @@ interface Props {
   sigmaLevel: number;
   /** Show the Fo-Fc difference cloud (green positive / red negative at ±3σ). */
   showDifference: boolean;
+  /** Ligand-environment contacts to draw as dashed lines. */
+  contacts?: ContactLine[];
+  /** Atom name to emphasise, driven by hover in the per-atom list. */
+  highlight?: string | null;
 }
 
 const ELEMENT_COLOR: Record<string, number> = {
@@ -89,7 +99,9 @@ function buildCloud(
   };
 }
 
-export function DensityCanvas({ map2FoFc, mapFoFc, atoms, sigmaLevel, showDifference }: Props) {
+export function DensityCanvas({
+  map2FoFc, mapFoFc, atoms, sigmaLevel, showDifference, contacts = [], highlight = null,
+}: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -202,14 +214,16 @@ export function DensityCanvas({ map2FoFc, mapFoFc, atoms, sigmaLevel, showDiffer
       // An atom whose difference map says "nothing measured here" is drawn hollow.
       const refuted = Number.isFinite(a.sigmaFoFc) && a.sigmaFoFc < -3;
       const weak = Number.isFinite(a.sigma2FoFc) && a.sigma2FoFc < 1;
+      const isHighlit = highlight === a.name;
       const mat = new THREE.MeshBasicMaterial({
-        color: colour,
+        color: isHighlit ? 0xffffff : colour,
         wireframe: refuted || weak,
         transparent: weak,
         opacity: weak ? 0.85 : 1,
       });
       const mesh = new THREE.Mesh(sphere, mat);
       mesh.position.set(...a.pos);
+      if (isHighlit) mesh.scale.setScalar(1.5);
       group.add(mesh);
     }
 
@@ -229,6 +243,25 @@ export function DensityCanvas({ map2FoFc, mapFoFc, atoms, sigmaLevel, showDiffer
       group.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xdfe6ef })));
     }
 
+    // Contacts to the environment, drawn as dashed lines to the closest
+    // approach. Deliberately dimmer than the molecule: they are context, and
+    // the density is the argument.
+    const contactPositions: number[] = [];
+    for (const c of contacts) {
+      if (!c.from || !c.to) continue;
+      contactPositions.push(...c.from, ...c.to);
+    }
+    if (contactPositions.length) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(contactPositions, 3));
+      const mat = new THREE.LineDashedMaterial({
+        color: 0x7f8fa4, dashSize: 0.28, gapSize: 0.22, transparent: true, opacity: 0.75,
+      });
+      const lines = new THREE.LineSegments(geo, mat);
+      lines.computeLineDistances(); // dashes are inert without this
+      group.add(lines);
+    }
+
     state.scene.add(group);
     return () => {
       state.scene.remove(group);
@@ -239,7 +272,7 @@ export function DensityCanvas({ map2FoFc, mapFoFc, atoms, sigmaLevel, showDiffer
         }
       });
     };
-  }, [atoms]);
+  }, [atoms, contacts, highlight]);
 
   // The density clouds — rebuilt when the threshold moves.
   useEffect(() => {
