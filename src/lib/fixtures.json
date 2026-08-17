@@ -1,0 +1,72 @@
+{
+  "1cbs/REA": {
+    "atomCount": 22,
+    "meanSigma": 3.4228,
+    "fractionWeak": 0,
+    "refutedCount": 0,
+    "sigmaSource": 0.356173,
+    "sampleCount": [
+      27,
+      36,
+      41
+    ],
+    "referenceN": 253,
+    "atoms": [
+      {
+        "name": "C1",
+        "sigma2FoFc": 2.687,
+        "sigmaFoFc": -0.243
+      },
+      {
+        "name": "C10",
+        "sigma2FoFc": 4.198,
+        "sigmaFoFc": 0.792
+      },
+      {
+        "name": "C11",
+        "sigma2FoFc": 4.041,
+        "sigmaFoFc": 0.014
+      },
+      {
+        "name": "C12",
+        "sigma2FoFc": 4.183,
+        "sigmaFoFc": -0.122
+      }
+    ]
+  },
+  "13fl/NAG": {
+    "atomCount": 14,
+    "meanSigma": 1.138,
+    "fractionWeak": 0.2143,
+    "refutedCount": 0,
+    "sigmaSource": 0.223948,
+    "sampleCount": [
+      23,
+      25,
+      22
+    ],
+    "referenceN": 0,
+    "atoms": [
+      {
+        "name": "C1",
+        "sigma2FoFc": 1.31,
+        "sigmaFoFc": -0.909
+      },
+      {
+        "name": "C2",
+        "sigma2FoFc": 1.175,
+        "sigmaFoFc": -1.248
+      },
+      {
+        "name": "C3",
+        "sigma2FoFc": 1.664,
+        "sigmaFoFc": -0.469
+      },
+      {
+        "name": "C4",
+        "sigma2FoFc": 1.446,
+        "sigmaFoFc": -0.766
+      }
+    ]
+  }
+}
