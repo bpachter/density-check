@@ -131,7 +131,58 @@ npm run crossvalidate   # decode live responses with this code and Mol*, assert 
 npm run verify          # re-derive the grid convention from physics against live data
 ```
 
+## Paste a target, get every ligand ever modelled into it
+
+Type `EGFR`, `P00918`, or `1cbs`. A target lookup is **one HTTP request** and resolves in about
+50 ms, because the archive was precomputed into 4,096 hash-bucketed shards.
+
+```
+258,403 PDB entries crawled          1,034 GraphQL batches, 4.1 minutes, zero dropped ids
+2,597,649 ligand instances     →     1,946,681 (ligand, accession) rows
+                                     4,096 shards · p50 3.3 KB gzipped per lookup
+```
+
+Ligands are ranked **worst-evidence-first**, and the ranking is the part worth explaining. RSCC is
+resolution-dependent — 0.85 is unremarkable at 3.2 Å and alarming at 1.1 Å — so sorting the archive
+by raw RSCC silently sorts by resolution instead of by fit. Every ligand is therefore ranked by
+where its RSCC falls in the distribution *for its own resolution shell*, from a mid-rank CDF built
+at index time. Carbonic anhydrase 2 opens on `3IEO/AMJ`: RSCC 0.315 at 2.00 Å, the **0.1st
+percentile** among comparable ligands.
+
+Three decisions that make the index correct rather than merely small:
+
+- **Attribution is by contact, not co-occurrence.** A ligand belongs to the proteins it physically
+  touches (`rcsb_target_neighbors`), never to every accession in the entry — 1.9M rows instead of
+  56M, and it is also simply true. Rapamycin in 1FAP appears under FKBP12 as primary *and* mTOR as
+  secondary; ATP in 1JST correctly does **not** appear under cyclin A.
+- **The reference population excludes ions.** Magnesium alone is 37% of all ligand instances in the
+  PDB. Ranking against everything would let ions define a normal fit and make every real drug look
+  poor, so the reference is X-ray + scored + RCSB's own "this is the ligand the paper is about" flag.
+- **Resolution shells are frozen constants, never quantile-derived.** Quantile shells drift as the
+  archive grows, which would silently change the percentile of data that never changed — and break
+  every permalink.
+
+No density is downloaded to build the index. Cross-entry ranking uses RCSB's published, already
+normalised metrics; per-atom sigma stays a within-one-map signal computed live when you open a
+ligand. That single decision is what makes an archive-scale index a four-minute job.
+
+## The chemist's view
+
+![Erlotinib coloured by density support](docs/media/depict.png)
+
+The same evidence as a flat structure. Erlotinib's quinazoline core reads solid blue above 2σ; its
+two methoxy-ethoxy tails read amber below 1σ. The disordered solubilising chain and the solid
+pharmacophore, in one glance.
+
+Getting each drawn atom to trace back to a measured sigma is the non-trivial part. Rather than
+fetching a prebuilt SDF and hoping its atom order matches the model, this reads the chemical
+component definition — which carries **both** atom names and bond orders — and builds the molblock
+in the same order as the model atoms already loaded. Atom *i* in the drawing is atom *i* in the
+evidence table by construction. RDKit is 6.6 MB of WebAssembly and loads only when you ask for it.
+
 ## Status
+
+![Carbonic anhydrase 2, every ligand ranked worst-evidence-first](docs/media/target.png)
 
 **Stage 1 — any entry, any ligand, linkable.**
 
@@ -150,14 +201,19 @@ npm run verify          # re-derive the grid convention from physics against liv
   bonded to the protein is modelled as part of the polymer, so it has no non-polymer entity and
   does not appear.
 
-**Next.** The stage that turns this from a viewer into a tool is the precomputed index: roughly
-183,000 ligand instances across the archive into a small, sharded, range-addressable file, so
-pasting a UniProt accession returns every ligand ever modelled into that target ranked
-worst-evidence-first in under two seconds. After that: chemical-series clustering with RDKit,
-bring-your-own coordinates and map (nothing uploaded), and an independent reference recomputed
-from deposited structure factors to strip model bias.
+**Stage 2 — the archive-wide index.** Shipped; see above.
 
-Not yet built: the 2D depiction cross-highlighted with the 3D view.
+**Stage 3 — the 2D depiction.** Shipped; see above.
+
+**Next.** Chemical-series clustering (Murcko scaffolds + Morgan fingerprints, brushed against the
+ranking and the 3D view on one shared selection model); bring-your-own coordinates and map, analysed
+entirely client-side with nothing uploaded; and an independent reference recomputed from deposited
+structure factors to strip the model bias that 2Fo−Fc carries by construction.
+
+A known limitation, stated rather than hidden: RSCC also depends on ligand **size** — a 6-atom
+fragment fits noise more easily than a 60-atom macrocycle. The correct fix is a 2-D stratification
+on (resolution shell × atom count). The atom count is already stored in every row, so it is an
+emit-only change; the 1-D version ships first and the confound is visible in the UI.
 
 ## Licence
 
